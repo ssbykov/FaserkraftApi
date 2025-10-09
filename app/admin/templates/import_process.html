@@ -1,0 +1,7 @@
+{% extends "sqladmin/layout.html" %}
+{% from 'sqladmin/_macros.html' import render_form_fields %}
+{% block content %}
+{% if flash_message %}
+    <div class="alert alert-info">{{ flash_message }}</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,91 @@
+services:
+  postgres:
+    image: postgres:16
+    env_file: .env
+    environment:
+      POSTGRES_USER: "${APP_CONFIG__DB__USER}"
+      POSTGRES_PASSWORD: "${APP_CONFIG__DB__PASSWORD}"
+      POSTGRES_DB: "${APP_CONFIG__DB__DATABASE}"
+    ports:
+      - "5432:5432"
+    networks:
+      - app_network
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${APP_CONFIG__DB__USER} -d ${APP_CONFIG__DB__DATABASE}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: faserkraft-api
+    env_file: .env
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: "postgresql://${APP_CONFIG__DB__USER}:${APP_CONFIG__DB__PASSWORD}@postgres:5432/${APP_CONFIG__DB__DATABASE}"
+      STATIC_URL: "/static/"
+    volumes:
+      - ./app/static:/app/static
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - app_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  nginx:
+    image: nginx:alpine
+    container_name: nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./app/static:/app/static
+      - ./assets/favicon.ico:/app/static/favicon.ico
+    depends_on:
+      - app
+    networks:
+      - app_network
+
+  redis:
+    image: redis:7
+    container_name: redis
+    ports:
+      - "6379:6379"
+    networks:
+      - app_network
+
+  celery:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: celery-worker
+    command: >
+      sh -c "PYTHONPATH=/app celery -A app.celery_worker.celery_app worker --loglevel=info"
+    volumes:
+      - .:/app
+    env_file: .env
+    restart: unless-stopped
+    depends_on:
+      - app
+      - redis
+    networks:
+      - app_network
+
+networks:
+  app_network:
+    driver: bridge
+    name: calendar_api_network
+    attachable: true
+
+volumes:
+  postgres_data:
+    name: calendar_api_postgres_data

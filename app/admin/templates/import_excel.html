@@ -1,0 +1,49 @@
+{% extends "sqladmin/layout.html" %}
+{% from 'sqladmin/_macros.html' import render_form_fields %}
+{% block content %}
+{% if flash_message %}
+    <div class="alert alert-info">{{ flash_message }}</div>
+{% endif %}
+<div class="container">
+    <h2>Импорт данных из Excel</h2>
+
+    {% if request.session.get("error") %}
+    <div class="alert alert-danger">
+        {{ request.session.get("error") }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+    {% set _ = request.session.pop("error") %}
+    {% endif %}
+
+    {% if success_message %}
+    <div class="alert alert-success">{{ success_message }}</div>
+    {% endif %}
+
+    {% if error_message %}
+    <div class="alert alert-danger">{{ error_message }}</div>
+    {% endif %}
+
+    <form method="post" action="/admin/import-quotes" enctype="multipart/form-data">
+        <div class="mb-3">
+            <label for="file" class="form-label">Excel файл:</label>
+            <input
+                    type="file"
+                    class="form-control"
+                    id="file"
+                    name="file"
+                    accept=".xlsx,.xls"
+                    required
+            >
+        </div>
+        <button type="submit" class="btn btn-primary">Импортировать</button>
+    </form>
+
+    <div class="mt-4">
+        <h5>Требования к файлу:</h5>
+        <ul>
+            <li>Формат .xlsx или .xls</li>
+            <li>Столбцы: name, description (опционально), photo_id (опционально)</li>
+        </ul>
+    </div>
+</div>
+{% endblock %}
