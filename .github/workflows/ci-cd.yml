@@ -1,0 +1,124 @@
+name: Docker CI/CD Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      PYTHON_VERSION: "3.11"
+      NODE_VERSION: "18.x"
+      DOCKER_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/faserkraft-api
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify required files
+        run: |
+          ls -la
+          if [ ! -f "app/alembic.ini" ]; then
+            echo "Error: alembic.ini not found!" >&2
+            exit 1
+          fi
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.DOCKER_IMAGE }}:latest
+            ${{ env.DOCKER_IMAGE }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      DOCKER_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/faserkraft-api
+      DB_PORT: 5432
+      RUN_HOST: 0.0.0.0
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup SSH
+        run: |
+          SSH_DIR="/tmp/ssh_$GITHUB_RUN_ID"
+          mkdir -p "$SSH_DIR"
+          echo "${{ secrets.SERVER_SSH_KEY }}" > "$SSH_DIR/id_rsa"
+          chmod 600 "$SSH_DIR/id_rsa"
+          ssh-keyscan ${{ secrets.SERVER_IP }} > "$SSH_DIR/known_hosts"
+          echo "SSH_DIR=$SSH_DIR" >> $GITHUB_ENV
+
+      - name: Create .env file
+        run: |
+          cat << EOF > .env
+          APP_CONFIG__DB__HOST=${{ secrets.DB_HOST }}
+          APP_CONFIG__DB__PORT=5432
+          APP_CONFIG__DB__USER=${{ secrets.DB_USER }}
+          APP_CONFIG__DB__PASSWORD=${{ secrets.DB_PASSWORD }}
+          APP_CONFIG__DB__DATABASE=${{ secrets.DB_DATABASE }}
+          APP_CONFIG__SUPER_USER__EMAIL=${{ secrets.SUPER_USER_EMAIL }}
+          APP_CONFIG__SUPER_USER__PASSWORD=${{ secrets.SUPER_USER_PASSWORD }}
+          APP_CONFIG__EMAIL__ADMIN_EMAIL=${{ secrets.ADMIN_EMAIL }}
+          APP_CONFIG__EMAIL__PASSWORD=${{ secrets.EMAIL_PASSWORD }}
+          APP_CONFIG__EMAIL__PORT=${{ secrets.EMAIL_PORT }}
+          APP_CONFIG__EMAIL__HOST=${{ secrets.EMAIL_HOST }}
+          APP_CONFIG__YANDEX_DISK__TOKEN=${{ secrets.YANDEX_DISK_TOKEN }}
+          APP_CONFIG__ACCESS_TOKEN__RESET_PASSWORD_TOKEN_SECRET=${{ secrets.RESET_PASSWORD_TOKEN_SECRET }}
+          APP_CONFIG__ACCESS_TOKEN__VERIFICATION_TOKEN_SECRET=${{ secrets.VERIFICATION_TOKEN_SECRET }}
+          APP_CONFIG__SQL_ADMIN__SECRET=${{ secrets.SQL_ADMIN_SECRET }}
+          APP_CONFIG__SQL_ADMIN__JWT_SECRET=${{ secrets.SQL_ADMIN_JWT_SECRET }}
+          APP_CONFIG__RUN__HOST=0.0.0.0
+          APP_CONFIG__RUN__PORT=8000
+          EOF
+
+      - name: Prepare server directories
+        run: |
+          ssh -o UserKnownHostsFile=$SSH_DIR/known_hosts -i "$SSH_DIR/id_rsa" \
+            ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} \
+            "mkdir -p /home/${{ secrets.SERVER_USER }}/nginx"
+
+      - name: Deploy application files
+        run: |
+          # Копируем основные файлы
+          scp -o UserKnownHostsFile=$SSH_DIR/known_hosts -i "$SSH_DIR/id_rsa" \
+            pyproject.toml poetry.lock docker-compose.yml .env \
+            ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }}:/home/${{ secrets.SERVER_USER }}/
+
+          # Копируем папки
+          scp -r -o UserKnownHostsFile=$SSH_DIR/known_hosts -i "$SSH_DIR/id_rsa" \
+            app/ nginx/ \
+            ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }}:/home/${{ secrets.SERVER_USER }}/
+
+
+      - name: Deploy application
+        run: |
+          ssh -o UserKnownHostsFile=$SSH_DIR/known_hosts -i "$SSH_DIR/id_rsa" \
+            ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} \
+            "cd /home/${{ secrets.SERVER_USER }} && \
+             docker compose down && \
+             docker compose build --no-cache && \
+             docker compose up -d"
+
+      - name: Verify Node.js installation
+        run: |
+          docker run --rm ${{ env.DOCKER_IMAGE }}:${{ github.sha }} node -v
+          docker run --rm ${{ env.DOCKER_IMAGE }}:${{ github.sha }} npm -v
