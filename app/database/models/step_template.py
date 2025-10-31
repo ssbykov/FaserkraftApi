@@ -13,4 +13,4 @@ class StepTemplate(BaseWithId):
     definitions = relationship("StepDefinition", back_populates="template")
 
     def __repr__(self):
-        return f"<StepTemplate(name={self.name})>"
+        return self.name
