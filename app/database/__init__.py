@@ -3,6 +3,13 @@ from .models import (
     Base,
     AccessToken,
     BackupDb,
+    Employee,
+    Process,
+    Product,
+    ProductStep,
+    StepTemplate,
+    StepDefinition,
+    DailyPlan,
 )
 from .db import db_helper, SessionDep
 
@@ -14,6 +21,13 @@ from .schemas import (
 __all__ = [
     "BaseWithId",
     "Base",
+    "Employee",
+    "Process",
+    "Product",
+    "ProductStep",
+    "StepTemplate",
+    "StepDefinition",
+    "DailyPlan",
     "BackupDb",
     "db_helper",
     "SessionDep",
