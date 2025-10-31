@@ -39,10 +39,14 @@ class ProductStep(BaseWithId):
     step_definition = relationship("StepDefinition", back_populates="product_steps")
 
     accepted_by = relationship(
-        "Employee", foreign_keys=[accepted_by_id], back_populates="steps_accepted"
+        "Employee",
+        foreign_keys=[accepted_by_id],
+        back_populates="product_steps_accepted",
     )
     performed_by = relationship(
-        "Employee", foreign_keys=[performed_by_id], back_populates="steps_performed"
+        "Employee",
+        foreign_keys=[performed_by_id],
+        back_populates="product_steps_performed",
     )
 
     def __repr__(self):

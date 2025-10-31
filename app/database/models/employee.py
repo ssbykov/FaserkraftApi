@@ -25,11 +25,11 @@ class Employee(BaseWithId):
     plans = relationship("DailyPlan", back_populates="employee")
     product_steps_performed = relationship(
         "ProductStep",
-        back_populates="performed_employee",
+        back_populates="performed_by",
         foreign_keys="ProductStep.performed_by_id",
     )
     product_steps_accepted = relationship(
         "ProductStep",
-        back_populates="accepted_employee",
+        back_populates="accepted_by",
         foreign_keys="ProductStep.accepted_by_id",
     )
