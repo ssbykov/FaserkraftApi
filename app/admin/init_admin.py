@@ -21,6 +21,7 @@ from .custom_model_view import CustomModelView
 from .model_views import (
     BackupDbAdmin,
     UserAdmin,
+    ProcessAdmin,
 )
 
 
@@ -32,6 +33,7 @@ async def init_admin(app: Any) -> None:
         templates_dir=str(settings.sql_admin.templates),
         authentication_backend=AdminAuth(secret_key=settings.sql_admin.secret),
     )
+    admin.add_view(ProcessAdmin)
     admin.add_view(BackupDbAdmin)
     admin.add_view(UserAdmin)
     assert isinstance(admin.authentication_backend, AdminAuth)
@@ -40,18 +42,18 @@ async def init_admin(app: Any) -> None:
 
 class NewAdmin(Admin):
     def __init__(
-            self,
-            app: Starlette,
-            engine: ENGINE_TYPE | None = None,
-            session_maker: sessionmaker | async_sessionmaker | None = None,  # type: ignore
-            base_url: str = "/admin",
-            title: str = "Admin",
-            logo_url: str | None = None,
-            favicon_url: str | None = None,
-            middlewares: Sequence[Middleware] | None = None,
-            debug: bool = False,
-            templates_dir: str = "templates",
-            authentication_backend: AuthenticationBackend | None = None,
+        self,
+        app: Starlette,
+        engine: ENGINE_TYPE | None = None,
+        session_maker: sessionmaker | async_sessionmaker | None = None,  # type: ignore
+        base_url: str = "/admin",
+        title: str = "Admin",
+        logo_url: str | None = None,
+        favicon_url: str | None = None,
+        middlewares: Sequence[Middleware] | None = None,
+        debug: bool = False,
+        templates_dir: str = "templates",
+        authentication_backend: AuthenticationBackend | None = None,
     ) -> None:
 
         super().__init__(
@@ -69,7 +71,7 @@ class NewAdmin(Admin):
         from starlette.exceptions import HTTPException as StarletteHTTPException
 
         async def http_exception(
-                request: Request, exc: Exception
+            request: Request, exc: Exception
         ) -> Response | Awaitable[Response]:
             assert isinstance(exc, (StarletteHTTPException, HTTPException))
             status_code = getattr(exc, "status_code", 500)
@@ -77,9 +79,9 @@ class NewAdmin(Admin):
 
             # Если AJAX-запрос — возвращаем JSON, иначе шаблон
             is_ajax = (
-                    request.headers.get("x-requested-with") == "XMLHttpRequest"
-                    or request.headers.get("accept") == "application/json"
-                    or request.method == "DELETE"
+                request.headers.get("x-requested-with") == "XMLHttpRequest"
+                or request.headers.get("accept") == "application/json"
+                or request.method == "DELETE"
             )
 
             if is_ajax:
@@ -184,7 +186,7 @@ class NewAdmin(Admin):
                     if isinstance(response, RedirectResponse):
                         if hasattr(model_view, "get_page_for_url"):
                             if page_suffix := await model_view.get_page_for_url(
-                                    request
+                                request
                             ):
                                 response.headers["location"] += page_suffix
                         return response
