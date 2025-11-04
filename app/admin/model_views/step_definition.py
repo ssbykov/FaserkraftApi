@@ -10,7 +10,7 @@ class StepDefinitionAdmin(
     repo_type = StepDefinitionRepository
     name_plural = "Этапы"
     name = "Этап"
-    icon = "fa-solid fa-step-forward"
+    icon = "fa-solid fa-list"
     category = "Раздел процессов"
 
     column_labels = {

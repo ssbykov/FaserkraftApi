@@ -10,19 +10,27 @@ class ProcessAdmin(
     repo_type = ProcessRepository
     name_plural = "Процессы"
     name = "Процесс"
-    icon = "fa-solid fa-icons"
+    icon = "fa-solid fa-diagram-project"
     category = "Раздел процессов"
 
     column_labels = {
         "name": "Название",
         "description": "Описание",
-        "step_definitions": "Этапы",
+        "steps": "Этапы",
     }
+
+    column_list = ("name", "description")
+
+    column_details_list = (
+        "name",
+        "description",
+        "steps",
+    )
 
     form_create_rules = [
         "name",
         "description",
-        "step_definitions",
+        "steps",
     ]
     form_edit_rules = form_create_rules.copy()
 
