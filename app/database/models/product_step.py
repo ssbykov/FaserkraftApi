@@ -16,6 +16,15 @@ class StepStatus(str, Enum):
     accepted = "accepted"
     done = "done"
 
+    @property
+    def label(self):
+        labels = {
+            StepStatus.pending: "⏳",
+            StepStatus.accepted: "🛠️",
+            StepStatus.done: "✔️",
+        }
+        return labels.get(self, self.value)
+
 
 class ProductStep(BaseWithId):
     __tablename__ = "product_steps"
@@ -50,7 +59,4 @@ class ProductStep(BaseWithId):
     )
 
     def __repr__(self):
-        return (
-            f"<ProductStep(product={self.product_id}, "
-            f"step_def={self.step_definition_id}, status={self.status})>"
-        )
+        return f"Этап:{self.step_definition_id}, статус={self.status}"
