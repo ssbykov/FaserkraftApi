@@ -24,6 +24,7 @@ from .model_views import (
     ProcessAdmin,
     StepDefinitionAdmin,
     StepTemplateAdmin,
+    ProductAdmin,
 )
 
 
@@ -38,6 +39,7 @@ async def init_admin(app: Any) -> None:
     admin.add_view(ProcessAdmin)
     admin.add_view(StepDefinitionAdmin)
     admin.add_view(StepTemplateAdmin)
+    admin.add_view(ProductAdmin)
     admin.add_view(BackupDbAdmin)
     admin.add_view(UserAdmin)
     assert isinstance(admin.authentication_backend, AdminAuth)
