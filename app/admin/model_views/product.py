@@ -3,6 +3,7 @@ from typing import Any
 from sqlalchemy.orm import selectinload
 
 from app.admin.custom_model_view import CustomModelView
+from app.admin.filters.process import ProcessNameFilter
 from app.database import Product, ProductStep, StepDefinition
 from app.database.crud.products import ProductRepository
 
@@ -25,6 +26,8 @@ class ProductAdmin(
         "created_at",
         "steps",
     )
+
+    column_filters = [ProcessNameFilter()]
 
     column_labels = {
         "serial_number": "Номер",
@@ -55,7 +58,8 @@ class ProductAdmin(
     }
 
     async def get_object_for_details(self, value: Any) -> Any:
-        stmt = self._stmt_by_identifier(value)
+        pk = value.get("path_params", {}).get("pk")
+        stmt = self._stmt_by_identifier(pk)
 
         stmt = stmt.options(
             selectinload(Product.steps)

@@ -16,6 +16,7 @@ class ProcessAdmin(
     name = "Процесс"
     icon = "fa-solid fa-diagram-project"
     category = "Раздел процессов"
+    category_icon = "fa-solid fa-cog"
 
     column_labels = {
         "name": "Название",
@@ -54,7 +55,8 @@ class ProcessAdmin(
     }
 
     async def get_object_for_details(self, value: Any) -> Any:
-        stmt = self._stmt_by_identifier(value)
+        pk = value.get("path_params", {}).get("pk")
+        stmt = self._stmt_by_identifier(pk)
 
         stmt = stmt.options(
             selectinload(Process.steps).selectinload(StepDefinition.template)
