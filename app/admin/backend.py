@@ -188,12 +188,10 @@ def owner_required(func: Callable[..., Any]) -> Callable[..., Any]:
 
 
 async def check_owner(view: Any, request: Request) -> bool:
-    if not (object_id := request.path_params.get("pk")):
-        object_id = request.query_params.get("pks")
     model_view = view.find_custom_model_view(request.path_params["identity"])
     if not model_view:
         return False
-    obj = await model_view.get_object_for_details(object_id)
+    obj = await model_view.get_object_for_details(request)
     user = request.session.get("user", {})
     if hasattr(obj, "user_id"):
         return bool(obj.user_id == user.get("id"))
