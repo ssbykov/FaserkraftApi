@@ -26,6 +26,4 @@ class Product(BaseWithId):
     )
 
     def __repr__(self):
-        return (
-            f"<Product(serial_number={self.serial_number}, process={self.process_id})>"
-        )
+        return self.serial_number
