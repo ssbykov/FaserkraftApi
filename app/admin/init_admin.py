@@ -26,6 +26,7 @@ from .model_views import (
     StepTemplateAdmin,
     ProductAdmin,
     ProductStepAdmin,
+    EmployeeAdmin,
 )
 
 
@@ -43,6 +44,7 @@ async def init_admin(app: Any) -> None:
     admin.add_view(ProductAdmin)
     admin.add_view(BackupDbAdmin)
     admin.add_view(UserAdmin)
+    admin.add_view(EmployeeAdmin)
     admin.add_view(ProductStepAdmin)
     assert isinstance(admin.authentication_backend, AdminAuth)
     await admin.authentication_backend.create_superuser()

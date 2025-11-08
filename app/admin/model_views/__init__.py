@@ -5,6 +5,7 @@ from .step_definition import StepDefinitionAdmin
 from .step_template import StepTemplateAdmin
 from .product import ProductAdmin
 from .product_step import ProductStepAdmin
+from .employee import EmployeeAdmin
 
 __all__ = [
     "BackupDbAdmin",
@@ -14,4 +15,5 @@ __all__ = [
     "StepTemplateAdmin",
     "ProductAdmin",
     "ProductStepAdmin",
+    "EmployeeAdmin",
 ]

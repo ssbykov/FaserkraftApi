@@ -1,7 +1,7 @@
 from enum import Enum
-from sqlalchemy import Enum as SqlEnum
 
-from sqlalchemy import Column, String, Integer, ForeignKey
+from sqlalchemy import Column, String, ForeignKey
+from sqlalchemy import Enum as SqlEnum
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 
 from .base import BaseWithId
@@ -35,3 +35,6 @@ class Employee(BaseWithId):
         back_populates="accepted_by",
         foreign_keys="ProductStep.accepted_by_id",
     )
+
+    def __repr__(self):
+        return self.name
