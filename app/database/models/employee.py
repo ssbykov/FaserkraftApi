@@ -17,6 +17,8 @@ class Employee(BaseWithId):
 
     name = Column(String, nullable=False, unique=True)
     role = Column(SqlEnum(Role, name="role_enum"), nullable=False, default=Role.worker)
+    telegram_id: Mapped[int] = mapped_column(String, nullable=True, unique=True)
+
     user_id: Mapped[int] = mapped_column(
         ForeignKey("users.id"), nullable=True, unique=True
     )
