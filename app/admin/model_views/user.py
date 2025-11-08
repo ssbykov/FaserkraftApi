@@ -18,12 +18,6 @@ class UserAdmin(
     column_labels = {
         "created_at": "Создан",
         "updated_at": "Изменен",
-        "elements": "Элементы",
-        "la": "Энергия Ла",
-        "haircutting": "Стрижка",
-        "arch": "Световая арка",
-        "yelam": "Йелам",
-        "events": "События дня",
     }
 
     column_list = (

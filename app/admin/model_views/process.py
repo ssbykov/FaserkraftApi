@@ -32,12 +32,11 @@ class ProcessAdmin(
         "steps",
     )
 
-    form_create_rules = [
+    form_rules = [
         "name",
         "description",
         "steps",
     ]
-    form_edit_rules = form_create_rules.copy()
 
     can_edit = True
     can_delete = True
