@@ -1,10 +1,11 @@
 from datetime import datetime
-from typing import Type
+from typing import Type, Optional, List
 from zoneinfo import ZoneInfo
 
 from pydantic import Field
 
 from app.database import BaseSchema, Product, BaseWithId
+from app.database.schemas.product_step import ProductStepOut
 
 
 class ProductBase(BaseSchema):
@@ -22,5 +23,6 @@ class ProductCreate(ProductBase):
 class ProductRead(ProductBase):
     id: int
     created_at: datetime
+    steps: Optional[List[ProductStepOut]]
 
     model_config = {"from_attributes": True}
