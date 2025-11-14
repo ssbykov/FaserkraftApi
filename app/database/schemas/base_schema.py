@@ -1,4 +1,4 @@
-from typing import Type
+from typing import Type, ClassVar
 
 from pydantic import BaseModel, Field
 
@@ -10,7 +10,7 @@ class BaseSchema(BaseModel):
     Базовый класс для схем, которые могут быть преобразованы в ORM-модели.
     """
 
-    base_class: Type[BaseWithId] = Field(default=BaseWithId, exclude=True)
+    base_class: ClassVar[Type[BaseWithId]] = BaseWithId
 
     def to_orm(self) -> BaseWithId:
         """
