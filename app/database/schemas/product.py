@@ -1,10 +1,10 @@
 from datetime import datetime
-from typing import Type, Optional, List
+from typing import Optional, List, Type, ClassVar
 from zoneinfo import ZoneInfo
 
 from pydantic import Field
 
-from app.database import BaseSchema, Product, BaseWithId
+from app.database import BaseSchema, Product
 from app.database.schemas.product_step import ProductStepOut
 
 
@@ -14,15 +14,21 @@ class ProductBase(BaseSchema):
 
 
 class ProductCreate(ProductBase):
-    base_class: Type["BaseWithId"] = Field(default=Product, exclude=True)
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(ZoneInfo("Europe/Moscow"))
     )
+    base_class: ClassVar[Type[Product]] = Product
+
+
+class ProductCreateOut(ProductBase):
+    id: int
+    created_at: datetime
+    model_config = {"from_attributes": True}
 
 
 class ProductRead(ProductBase):
     id: int
     created_at: datetime
-    steps: Optional[List[ProductStepOut]]
+    steps: Optional[List["ProductStepOut"]]
 
     model_config = {"from_attributes": True}
