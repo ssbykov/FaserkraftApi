@@ -1,11 +1,9 @@
 from fastapi import HTTPException
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload, joinedload
+from sqlalchemy.orm import joinedload, selectinload
 
-from app.database import Product, ProductStep, SessionDep, StepDefinition
+from app.database import Product, ProductStep, SessionDep, StepDefinition, Process
 from app.database.crud.mixines import GetBackNextIdMixin
-from app.database.crud.processes import ProcessRepository
 from app.database.models.product_step import StepStatus
 from app.database.schemas.product import ProductCreate
 
@@ -15,7 +13,6 @@ def get_product_repo(session: SessionDep) -> "ProductRepository":
 
 
 class ProductRepository(GetBackNextIdMixin[Product]):
-    session: AsyncSession
     model = Product
 
     async def create_product(self, product_in: ProductCreate):
@@ -27,8 +24,11 @@ class ProductRepository(GetBackNextIdMixin[Product]):
         product_id = product.id
 
         # 2️⃣ Create all steps for this product
-        repo = ProcessRepository(self.session)
-        process = await repo.get(product_in.process_id)
+        process = await self.session.get(
+            Process,
+            product_in.process_id,
+            options=[selectinload(Process.steps)],
+        )
         for step_def in process.steps:
             ps = ProductStep(
                 product_id=product_id,
