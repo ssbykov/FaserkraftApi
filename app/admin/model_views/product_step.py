@@ -53,7 +53,7 @@ class ProductStepAdmin(
     }
 
     async def get_object_for_details(self, value: Any) -> Any:
-        pk = value.get("path_params", {}).get("pk")
+        pk = value.get("path_params", {}).get("pk") or value.query_params.get("pks")
         stmt = self._stmt_by_identifier(pk)
 
         stmt = stmt.options(
