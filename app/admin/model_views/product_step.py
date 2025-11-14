@@ -1,9 +1,11 @@
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from sqlalchemy.orm import selectinload
 from starlette.requests import Request
 
 from app.admin.custom_model_view import CustomModelView
+from app.admin.utils import format_datetime
 from app.database import ProductStep, StepDefinition
 from app.database.crud.products_steps import ProductStepRepository
 
@@ -50,6 +52,8 @@ class ProductStepAdmin(
 
     column_formatters_detail = {
         "step_definition": format_steps,
+        "accepted_at": format_datetime,
+        "performed_at": format_datetime,
     }
 
     async def get_object_for_details(self, value: Any) -> Any:

@@ -1,4 +1,5 @@
 from typing import Callable, Type, Any
+from zoneinfo import ZoneInfo
 
 from markupsafe import Markup
 from sqlalchemy import Text
@@ -22,3 +23,10 @@ def text_formater(
     return {
         column.name: formater for column in columns if isinstance(column.type, Text)
     }
+
+
+def format_datetime(obj, param: str) -> str:
+    dt = getattr(obj, param, None)
+    if dt is not None:
+        return dt.astimezone(ZoneInfo("Europe/Moscow")).strftime("%Y-%m-%d %H:%M:%S")
+    return ""

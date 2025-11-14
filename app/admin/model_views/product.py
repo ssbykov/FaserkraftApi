@@ -4,6 +4,7 @@ from sqlalchemy.orm import selectinload
 
 from app.admin.custom_model_view import CustomModelView
 from app.admin.filters.process import ProcessNameFilter
+from app.admin.utils import format_datetime
 from app.database import Product, ProductStep, StepDefinition
 from app.database.crud.products import ProductRepository
 
@@ -55,6 +56,11 @@ class ProductAdmin(
 
     column_formatters_detail = {
         "steps": format_steps,
+        "created_at": format_datetime,
+    }
+
+    column_formatters = {
+        "created_at": format_datetime,
     }
 
     async def get_object_for_details(self, value: Any) -> Any:
