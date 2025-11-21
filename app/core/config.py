@@ -19,7 +19,7 @@ class LoggerConfig(BaseModel):
 
 class RunConfig(BaseModel):
     host: str
-    port: int = 5000
+    port: int
 
 
 class SuperUser(BaseModel):
