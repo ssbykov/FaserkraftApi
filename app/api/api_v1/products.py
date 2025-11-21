@@ -60,5 +60,7 @@ async def get_product(
 ):
     try:
         return await repo.get(serial_number)
+    except HTTPException as exc:
+        raise exc
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Произошла ошибка: {e}")
