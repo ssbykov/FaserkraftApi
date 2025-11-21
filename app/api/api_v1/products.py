@@ -56,7 +56,7 @@ async def create_product(
 async def get_product(
     serial_number: str,
     repo: Annotated[ProductRepository, Depends(get_product_repo)],
-    user: Annotated[User, Depends(current_super_user)],
+    # user: Annotated[User, Depends(current_super_user)],
 ):
     try:
         return await repo.get(serial_number)
