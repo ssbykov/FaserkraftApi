@@ -94,7 +94,7 @@ class DbSettings(BaseSettings):
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=ROOT.parent / ".env_dev",
+        env_file=ROOT.parent / ".env",
         case_sensitive=False,
         env_nested_delimiter="__",
         env_prefix="APP_CONFIG__",
