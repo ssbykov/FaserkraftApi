@@ -10,7 +10,7 @@ class EmployeeAdmin(
     repo_type = EmployeeRepository
     name_plural = "Сотрудники"
     name = "Сотрудник"
-    icon = "fa-solid fa-user"
+    category = "Пользователи"
 
     column_labels = {"name": "Имя", "role": "Роль", "user": "Пользователь"}
 

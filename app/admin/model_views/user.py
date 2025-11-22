@@ -13,7 +13,8 @@ class UserAdmin(
     repo_type = UsersRepository
     name_plural = "Пользователи"
     name = "Пользователь"
-    icon = "fa-solid fa-user"
+    category = "Пользователи"
+    category_icon = "fa-solid fa-user"
 
     column_labels = {
         "created_at": "Создан",
