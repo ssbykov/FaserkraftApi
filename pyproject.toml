@@ -10,7 +10,7 @@ packages = [
 ]
 license = { text = "MIT" }
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<4.0"
 dependencies = [
     "requests (>=2.32.3,<3.0.0)",
     "fastapi (>=0.115.7,<0.116.0)",
@@ -33,6 +33,7 @@ dependencies = [
     "apscheduler (>=3.11.0,<4.0.0)",
     "celery (>=5.5.2,<6.0.0)",
     "redis (>=6.2.0,<7.0.0)",
+    "qrcode[pil] (>=8.2,<9.0)",
 ]
 
 
