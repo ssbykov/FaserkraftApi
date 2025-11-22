@@ -65,14 +65,17 @@ class BackupDbAdmin(
     async def create_backup() -> str | None:
         task = check_job_status(backup_task.name)
 
-        if task and task.status == "SUCCESS" or not task:
+        # Если нет задачи или задача завершилась успешно — запускаем новый бэкап
+        if not task or task.status == "SUCCESS":
             new_task = run_process_backup.delay()
             redis_client.set(run_process_backup.name, new_task.id)
             return None
-        info = f"{type(getattr(task, 'result', None))}, {task.status}"
-        status_dict = {
-            "PENDING": "Предыдущий бэкап не закончен...",
-            "FAILURE": f"Ошибка: {info}",
-        }
 
-        return status_dict.get(task.status, info)
+        # Если задача завершилась неудачно — можно очистить ключ
+        if task.status == "FAILURE":
+            redis_client.delete(backup_task.name)
+            # Вывести информацию об ошибке
+            info = f"{type(getattr(task, 'result', None))}, {task.status}"
+            return f"Ошибка: {info}"
+
+        return "Предыдущий бэкап не закончен..."
