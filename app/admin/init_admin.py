@@ -16,7 +16,7 @@ from starlette.responses import Response, RedirectResponse, JSONResponse
 
 from app.core import settings
 from app.database import db_helper
-from .backend import AdminAuth, owner_required
+from .backend import AdminAuth
 from .custom_model_view import CustomModelView
 from .model_views import (
     BackupDbAdmin,
@@ -138,7 +138,6 @@ class NewAdmin(Admin):
         context["request"] = request
         return await self.templates.TemplateResponse(request, result.template, context)
 
-    @owner_required
     async def edit(self, request: Request) -> Response:
         """Edit model endpoint."""
 
@@ -210,7 +209,6 @@ class NewAdmin(Admin):
     def find_custom_model_view(self, identity: str) -> CustomModelView[Any]:
         return cast(CustomModelView[Any], self._find_model_view(identity))
 
-    @owner_required
     async def delete(self, request: Request) -> Response:
         identity = request.path_params["identity"]
         model_view = self.find_custom_model_view(identity)

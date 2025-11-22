@@ -170,29 +170,3 @@ class AdminAuth(AuthenticationBackend):
                 is_ok=False,
                 error=str(e),
             )
-
-
-def owner_required(func: Callable[..., Any]) -> Callable[..., Any]:
-    @functools.wraps(func)
-    async def wrapper_decorator(*args: Any, **kwargs: Any) -> Any:
-        view, request = args[0], args[1]
-        is_owner = await check_owner(view=view, request=request)
-        if not is_owner and not request.session.get("user").get("is_superuser"):
-            raise HTTPException(status_code=403)
-
-        if inspect.iscoroutinefunction(func):
-            return await func(*args, **kwargs)
-        return func(*args, **kwargs)
-
-    return wrapper_decorator
-
-
-async def check_owner(view: Any, request: Request) -> bool:
-    model_view = view.find_custom_model_view(request.path_params["identity"])
-    if not model_view:
-        return False
-    obj = await model_view.get_object_for_details(request)
-    user = request.session.get("user", {})
-    if hasattr(obj, "user_id"):
-        return bool(obj.user_id == user.get("id"))
-    return False
