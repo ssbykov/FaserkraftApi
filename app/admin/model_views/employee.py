@@ -12,10 +12,7 @@ class EmployeeAdmin(
     name = "Сотрудник"
     icon = "fa-solid fa-user"
 
-    column_labels = {
-        "name": "Имя",
-        "role": "Роль",
-    }
+    column_labels = {"name": "Имя", "role": "Роль", "user": "Пользователь"}
 
     column_list = (
         "name",
@@ -25,12 +22,14 @@ class EmployeeAdmin(
     column_details_list = (
         "name",
         "role",
+        "user",
         "telegram_id",
     )
 
     form_rules = [
         "name",
         "role",
+        "user",
         "telegram_id",
     ]
 
