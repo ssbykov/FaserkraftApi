@@ -12,10 +12,9 @@ PORT = 6379
 DB = settings.db.redis_db
 
 redis_client = redis.Redis(host=HOST, port=PORT, db=DB)
+REDIS_PATH = f"redis://{HOST}:{PORT}/{DB}"
 
-celery_app = Celery(
-    "kkcalendar", broker=f"redis://{HOST}:{PORT}", backend=f"redis://{HOST}:{PORT}"
-)
+celery_app = Celery("fkapi", broker=REDIS_PATH, backend=REDIS_PATH)
 
 celery_app.autodiscover_tasks(["app.tasks"])
 

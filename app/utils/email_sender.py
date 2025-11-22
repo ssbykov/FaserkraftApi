@@ -1,4 +1,5 @@
 import logging
+import os
 import smtplib
 from email.message import EmailMessage
 from typing import Any
@@ -26,7 +27,7 @@ TEMPLATE_DICT = {
     },
 }
 
-TEMPLATES_DIR = "app/utils/email_templates/"
+TEMPLATES_DIR = os.path.dirname(__file__) + "/email_templates/"
 
 
 async def send_email(context: dict[str, Any], action: str | None = None) -> None:
