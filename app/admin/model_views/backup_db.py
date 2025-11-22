@@ -50,7 +50,7 @@ class BackupDbAdmin(
         add_in_detail=False,
         add_in_list=True,
         confirmation_message=f"Вы уверены, что хотите восстановить базу из резервной копии?"
-        f"Будет использоавана последная отмеченная резервная копия.",
+        f"Будет использована последняя отмеченная резервная копия.",
     )
     async def restore_db(self, request: Request) -> RedirectResponse:
         async for session in db_helper.get_session():
