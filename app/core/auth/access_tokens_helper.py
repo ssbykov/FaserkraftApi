@@ -5,6 +5,7 @@ from typing import Callable, Any, TYPE_CHECKING
 from app.api.dependencies.access_tokens import get_access_token_db
 from app.api.dependencies.backend import authentication_backend
 from app.core import settings
+from app.core.auth.singleton import singleton
 from app.database import db_helper
 
 if TYPE_CHECKING:
@@ -24,6 +25,7 @@ def with_token_db(func: Callable[..., Any]) -> Callable[..., Any]:
     return wrapper
 
 
+@singleton
 class AccessTokensHelper:
     def __init__(self) -> None:
         self.authentication_backend = authentication_backend
