@@ -25,6 +25,10 @@ TEMPLATE_DICT = {
         "template": "reset_password_template.html",
         "subject": "Подтверждение изменения пароля",
     },
+    "send_qr": {
+        "template": "send_qr_template.html",
+        "subject": "Ваш QR-код",
+    },
 }
 
 TEMPLATES_DIR = os.path.dirname(__file__) + "/email_templates/"
@@ -52,6 +56,15 @@ async def send_email(context: dict[str, Any], action: str | None = None) -> None
     rendered_html_content = template.render(**context)
 
     msg.add_alternative(rendered_html_content, subtype="html")
+
+    if "qr_code_bytes" in context:
+        msg.get_payload()[-1].add_related(
+            context["qr_code_bytes"],
+            maintype="image",
+            subtype="png",
+            cid="<qr_code>",
+            filename="qr.png",
+        )
 
     # Настройка SMTP сервера и отправка сообщения
     try:
