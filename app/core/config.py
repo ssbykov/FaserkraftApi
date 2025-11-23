@@ -74,6 +74,7 @@ class DbSettings(BaseSettings):
     port: int
     database: str
     redis_host: str
+    redis_db: str
     backups_dir: Path = ROOT / ".backups/"
 
     @property
