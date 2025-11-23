@@ -2,10 +2,40 @@
 {% block content %}
 <div class="col-12">
     <div class="card">
-        <div class="card-header">
+        <div class="card-header d-flex align-items-center justify-content-between">
             {% set item_position = model_view.get_item_position(request)["item_position"] %}
-            <h3 class="card-title">{{ item_position }} из {{ model_view.get_count_items(request) }}</h3>
+            <h3 class="card-title mb-0">
+                {{ item_position }} из {{ model_view.get_count_items(request) }}
+            </h3>
+            <div class="d-flex" style="margin-top:20px; margin-right:20px;">
+                {% for custom_action, label in model_view._custom_actions_in_detail|dictsort %}
+                {% if custom_action in model_view.action_in_header %}
+                <div style="margin-left:10px;">
+                    {% if custom_action in model_view._custom_actions_confirmation %}
+                    <a href="#" class="btn btn-warning" data-bs-toggle="modal"
+                       data-bs-target="#modal-confirmation-{{ custom_action }}">
+                        {{ label }}
+                    </a>
+                    {% with
+                    confirmation_message = model_view._custom_actions_confirmation[custom_action],
+                    custom_action=custom_action,
+                    url = model_view._url_for_action(request, custom_action) + '?pks=' + (get_object_identifier(model) |
+                    string)
+                    %}
+                    {% include 'sqladmin/modals/details_action_confirmation.html' %}
+                    {% endwith %}
+                    {% else %}
+                    <a href="{{ model_view._url_for_action(request, custom_action) }}?pks={{ get_object_identifier(model) }}"
+                       class="btn btn-secondary">
+                        {{ label }}
+                    </a>
+                    {% endif %}
+                </div>
+                {% endif %}
+                {% endfor %}
+            </div>
         </div>
+
         <div class="card-body border-bottom py-3">
             <div class="table-responsive">
                 <table class="table card-table table-vcenter text-nowrap table-hover table-bordered">
@@ -25,7 +55,7 @@
                         {% if is_list( value ) %}
                         <td>
                             {% set columns = model_view.get_detail_columns_count(name) %}
-                                  <div style="display: grid; grid-template-columns: repeat({{ columns.count }}, {{ columns.width }}px); gap: 10px;">
+                            <div style="display: grid; grid-template-columns: repeat({{ columns.count }}, {{ columns.width }}px); gap: 10px;">
                                 {% for elem, formatted_elem in zip(value, formatted_value) %}
                                 <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
                                     <a href="{{ model_view._build_url_for('admin:details', request, elem) }}">{{
@@ -72,6 +102,7 @@
                     </div>
                     {% endif %}
                     {% for custom_action,label in model_view._custom_actions_in_detail|dictsort %}
+                    {% if custom_action not in model_view.action_in_header %}
                     <div class="col-md-1" style="margin-left: 10px;">
                         {% if custom_action in model_view._custom_actions_confirmation %}
                         <a href="#" class="btn btn-secondary" data-bs-toggle="modal"
@@ -85,6 +116,7 @@
                         </a>
                         {% endif %}
                     </div>
+                    {% endif %}
                     {% endfor %}
                 </div>
             </div>

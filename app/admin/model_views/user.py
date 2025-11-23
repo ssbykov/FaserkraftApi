@@ -1,3 +1,4 @@
+import inspect
 import io
 
 import qrcode
@@ -55,8 +56,10 @@ class UserAdmin(
     def is_accessible(self, request: Request) -> bool:
         return check_superuser(request)
 
+    action_in_header = ["generate-qr"]
+
     @action(
-        name="generate_qr",
+        name="generate-qr",
         label="QR-код",
         add_in_detail=True,
         add_in_list=False,
