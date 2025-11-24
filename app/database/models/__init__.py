@@ -9,6 +9,7 @@ from .product_step import ProductStep
 from .step_definition import StepDefinition
 from .step_template import StepTemplate
 from .daily_plan import DailyPlan
+from .device import Device
 
 __all__ = [
     "BaseWithId",
@@ -23,4 +24,5 @@ __all__ = [
     "AccessToken",
     "Base",
     "BackupDb",
+    "Device",
 ]
