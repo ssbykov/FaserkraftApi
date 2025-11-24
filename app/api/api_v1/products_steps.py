@@ -24,9 +24,13 @@ async def accept_step(
     step_id: int,
     employee_id: int,
     repo: Annotated[ProductStepRepository, Depends(get_products_steps_repo)],
-) -> ProductStepUpdate | str:
+) -> ProductStepUpdate:
     try:
         step = await repo.accept_step(step_id, employee_id)
+        if step is None:
+            raise HTTPException(status_code=404, detail="Шаг не найден")
         return ProductStepUpdate.model_validate(step)
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Произошла ошибка: {e}")
+        raise HTTPException(status_code=500, detail="Произошла внутренняя ошибка")

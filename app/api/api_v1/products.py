@@ -24,43 +24,78 @@ async def create_product(
     product_in: ProductCreate,
     repo: Annotated[ProductRepository, Depends(get_product_repo)],
     user: Annotated[User, Depends(current_super_user)],
-) -> ProductCreateOut | str:
+) -> ProductCreateOut:
     try:
         product = await repo.create_product(product_in)
         return ProductCreateOut.model_validate(product)
+
     except IntegrityError as e:
         msg = str(e.orig)
+
+        # FK на process_id
         if (
             "violates foreign key constraint" in msg
             or "ForeignKeyViolationError" in msg
+            or "foreign key" in msg.lower()
         ):
             raise HTTPException(
-                status_code=422, detail="Указан несуществующий process_id"
+                status_code=422,
+                detail="Указан несуществующий process_id",
             )
-        elif "duplicate key value" in msg or "уже существует" in msg:
+
+        # уникальность по serial_number
+        if (
+            "duplicate key value" in msg
+            or "уже существует" in msg
+            or "unique constraint" in msg.lower()
+        ):
             raise HTTPException(
                 status_code=409,
                 detail="Продукт с таким серийным номером уже существует",
             )
-        else:
-            # Остальные ошибки целостности
-            raise HTTPException(status_code=400, detail=f"Ошибка данных: {msg}")
-    except Exception as e:
-        # Прочие ошибки — 500 Internal Server Error
-        raise HTTPException(status_code=500, detail=f"Произошла ошибка: {e}")
+
+        # прочие ошибки целостности без утечки текста SQL
+        raise HTTPException(
+            status_code=400,
+            detail="Ошибка целостности данных при создании продукта",
+        )
+
+    except ValueError as e:
+        # например, если в repo.create_product ты явно кинул,
+        # что процесс не найден
+        raise HTTPException(status_code=422, detail=str(e))
+
+    except HTTPException:
+        # если repo сам кинул HTTPException — просто пробрасываем
+        raise
+
+    except Exception:
+        # внутренняя ошибка без деталей наружу
+        raise HTTPException(
+            status_code=500,
+            detail="Произошла внутренняя ошибка при создании продукта",
+        )
 
 
 @router.get(
-    "/{serial_number}", response_model=ProductRead, status_code=status.HTTP_200_OK
+    "/{serial_number}",
+    response_model=ProductRead,
+    status_code=status.HTTP_200_OK,
 )
 async def get_product(
     serial_number: str,
     repo: Annotated[ProductRepository, Depends(get_product_repo)],
     # user: Annotated[User, Depends(current_super_user)],
-):
+) -> ProductRead:
     try:
-        return await repo.get(serial_number)
+        product = await repo.get(serial_number)
+        return ProductRead.model_validate(product)
     except HTTPException as exc:
+        # пробрасываем 404 и другие осознанные HTTP-ошибки
         raise exc
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Произошла ошибка: {e}")
+    except Exception:
+        # внутренняя ошибка без лишних деталей наружу
+        raise HTTPException(
+            status_code=500,
+            detail="Произошла внутренняя ошибка при получении продукта",
+        )

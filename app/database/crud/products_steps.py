@@ -20,8 +20,8 @@ class ProductStepRepository(GetBackNextIdMixin[ProductStep]):
         if not step:
             return None
 
-        # Проверяем, выполнен ли предыдущий шаг
         step_def = await self.session.get(StepDefinition, step.step_definition_id)
+
         prev_step = (
             await self.session.execute(
                 select(ProductStep)
@@ -40,7 +40,12 @@ class ProductStepRepository(GetBackNextIdMixin[ProductStep]):
         step.status = StepStatus.accepted
         step.accepted_by_id = employee_id
         step.accepted_at = datetime.now(ZoneInfo("Europe/Moscow"))
-        self.session.add(step)
-        await self.session.commit()
+
+        try:
+            await self.session.commit()
+        except Exception:
+            await self.session.rollback()
+            raise
+
         await self.session.refresh(step)
         return step
