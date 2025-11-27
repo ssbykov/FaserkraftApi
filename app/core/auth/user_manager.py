@@ -1,4 +1,5 @@
 import io
+import json
 import logging
 import re
 from typing import Optional, TYPE_CHECKING, Union
@@ -54,7 +55,9 @@ class UserManager(IntegerIDMixin, BaseUserManager[User, int]):
         elif suffix_path == "generate-qr":
             qr_json = {"action": "register", "id": user.id, "token": token}
 
-            img = qrcode.make(qr_json)
+            data = json.dumps(qr_json, ensure_ascii=False)
+
+            img = qrcode.make(data)
             byte_io = io.BytesIO()
             img.save(byte_io, format="PNG")
             byte_io.seek(0)
