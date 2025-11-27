@@ -1,8 +1,8 @@
 """добавлена Device
 
-Revision ID: ade24326d3b8
+Revision ID: c75c8ec20e38
 Revises: 6ed58a8bf1bb
-Create Date: 2025-11-27 13:24:13.537236
+Create Date: 2025-11-27 13:37:54.218214
 
 """
 
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = "ade24326d3b8"
+revision: str = "c75c8ec20e38"
 down_revision: Union[str, None] = "6ed58a8bf1bb"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -37,6 +37,7 @@ def upgrade() -> None:
         sa.UniqueConstraint("deviceId", name=op.f("uq_devices_deviceId")),
     )
     op.create_index(op.f("ix_devices_id"), "devices", ["id"], unique=True)
+    op.add_column("employees", sa.Column("device_id", sa.Integer(), nullable=True))
     op.create_foreign_key(
         op.f("fk_employees_device_id_devices"),
         "employees",
@@ -50,5 +51,6 @@ def downgrade() -> None:
     op.drop_constraint(
         op.f("fk_employees_device_id_devices"), "employees", type_="foreignkey"
     )
+    op.drop_column("employees", "device_id")
     op.drop_index(op.f("ix_devices_id"), table_name="devices")
     op.drop_table("devices")
