@@ -27,5 +27,6 @@ class DeviceRegister(DeviceCreate):
     password: str
     user_id: int
 
+
 class DeviceResponse(DeviceBase):
     employee_name: int
