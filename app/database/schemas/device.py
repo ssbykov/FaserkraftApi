@@ -5,11 +5,9 @@ from app.database.models import Device
 
 
 class DeviceBase(BaseSchema):
-    deviceId: str
+    device_id: str
     model: str
     manufacturer: str
-    is_active: bool
-    created_at: str
 
 
 class DeviceCreate(DeviceBase):
@@ -28,3 +26,6 @@ class DeviceRegister(DeviceCreate):
     token: str
     password: str
     user_id: int
+
+class DeviceResponse(DeviceBase):
+    employee_name: int
