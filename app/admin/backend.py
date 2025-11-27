@@ -1,12 +1,7 @@
-import functools
-import inspect
-from typing import Callable, Any
-
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi_users import InvalidPasswordException
 from pydantic import ValidationError, EmailStr
 from sqladmin.authentication import AuthenticationBackend
-from starlette.exceptions import HTTPException
 from starlette.requests import Request
 
 from app.core import settings
@@ -34,7 +29,7 @@ class AdminAuth(AuthenticationBackend):
             return await self.create_new_user(username, password)
 
         elif action == "reset_password":
-            return await self.forgot_password(username, password, request)
+            return await self.forgot_password(username, request)
 
         else:
             credentials = OAuth2PasswordRequestForm(
@@ -109,11 +104,10 @@ class AdminAuth(AuthenticationBackend):
             await self.user_manager_helper.create_user(user_create=user_create)
 
     async def forgot_password(
-        self, username: str, password: str, request: Request
+        self, username: str, request: Request
     ) -> AdminAuthResponse:
         user = await self.user_manager_helper.get_user_by_email(user_email=username)
         try:
-            request.session.update({"password": password})
             await self.user_manager_helper.forgot_password(user=user, request=request)
 
             return AdminAuthResponse(
