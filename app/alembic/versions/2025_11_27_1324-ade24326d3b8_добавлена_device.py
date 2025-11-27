@@ -1,8 +1,8 @@
 """добавлена Device
 
-Revision ID: 451ba13329d5
+Revision ID: ade24326d3b8
 Revises: 6ed58a8bf1bb
-Create Date: 2025-11-27 12:54:33.279694
+Create Date: 2025-11-27 13:24:13.537236
 
 """
 
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = "451ba13329d5"
+revision: str = "ade24326d3b8"
 down_revision: Union[str, None] = "6ed58a8bf1bb"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
