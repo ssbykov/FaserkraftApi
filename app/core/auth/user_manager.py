@@ -1,7 +1,9 @@
+import io
 import logging
 import re
 from typing import Optional, TYPE_CHECKING, Union
 
+import qrcode
 from fastapi_users import (
     BaseUserManager,
     IntegerIDMixin,
@@ -36,17 +38,32 @@ class UserManager(IntegerIDMixin, BaseUserManager[User, int]):
         token: str,
         request: Optional["Request"] = None,
     ) -> None:
-        reset_url = (
-            f"http://{config.settings.run.host}"
-            f":{config.settings.run.port}"
-            f"/{config.settings.api.auth_url}"
-            f"/reset-password?token={token}"
-        )
-        context = {
-            "user_email": user.email,
-            "url_reset": reset_url,
-        }
-        run_process_mail.delay(None, context=context, action="forgot_password")
+        suffix_path = request.url.path.split("/")[-1]
+        if suffix_path == "login":
+            reset_url = (
+                f"http://{config.settings.run.host}"
+                f":{config.settings.run.port}"
+                f"/{config.settings.api.auth_url}"
+                f"/reset-password?token={token}"
+            )
+            context = {
+                "user_email": user.email,
+                "url_reset": reset_url,
+            }
+            run_process_mail.delay(None, context=context, action="forgot_password")
+        elif suffix_path == "generate-qr":
+            qr_json = {"action": "register", "id": user.id, "token": token}
+
+            img = qrcode.make(qr_json)
+            byte_io = io.BytesIO()
+            img.save(byte_io, format="PNG")
+            byte_io.seek(0)
+            context = {
+                "name": user.email,
+                "user_email": user.email,
+                "qr_code_bytes": byte_io.getvalue(),
+            }
+            run_process_mail.delay(None, context=context, action="send_qr")
 
     async def on_after_request_verify(
         self,
