@@ -44,7 +44,6 @@ async def register_device(
                 json=data,
             )
 
-        if resp.status_code == 200:
             employee = await register_device_logic(
                 device_in, device_repo, employee_repo
             )
