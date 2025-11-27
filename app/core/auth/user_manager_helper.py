@@ -8,7 +8,6 @@ from starlette.requests import Request
 from app.api.dependencies.access_tokens import get_access_token_db
 from app.api.dependencies.user_manager import get_user_manager
 from app.api.dependencies.users import get_user_db
-from app.core.auth.singleton import singleton
 from app.database import db_helper
 from app.database.models import User
 from app.database.schemas.user import UserCreate
@@ -34,7 +33,6 @@ def with_user_manager(func: Callable[..., Any]) -> Callable[..., Any]:
     return wrapper
 
 
-@singleton
 class UserManagerHelper:
     @staticmethod
     @with_user_manager
