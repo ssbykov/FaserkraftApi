@@ -100,3 +100,19 @@ class UserManagerHelper:
         request: Request,
     ) -> None:
         await user_manager.forgot_password(user=user, request=request)
+
+    @staticmethod
+    @with_user_manager
+    async def reset_password(
+        user_manager: "UserManager",
+        token: str,
+        password: str,
+        request: Request,
+    ) -> None:
+        await user_manager.reset_password(
+            token=token, password=password, request=request
+        )
+
+
+def get_user_manager_helper() -> UserManagerHelper:
+    return UserManagerHelper()
