@@ -29,4 +29,5 @@ class DeviceRegister(DeviceCreate):
 
 
 class DeviceResponse(DeviceBase):
+    user_id: int
     employee_name: int
