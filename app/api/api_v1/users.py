@@ -1,12 +1,13 @@
 import logging
 from typing import Annotated
 
-import httpx
 from fastapi import APIRouter, Depends
 from starlette import status
+from starlette.requests import Request
 
 from app.api.api_v1.fastapi_users import fastapi_users
 from app.core import settings
+from app.core.auth.user_manager_helper import get_user_manager_helper, UserManagerHelper
 from app.database import Employee
 from app.database.crud.devices import DeviceRepository, get_device_repo
 from app.database.crud.employees import EmployeeRepository, get_employee_repo
@@ -28,31 +29,32 @@ router.include_router(fastapi_users.get_users_router(UserRead, UserUpdate))
 
 @router.post(
     "/new-device",
-    response_model=None,  # твоя схема ответа
+    response_model=DeviceResponse,
     status_code=status.HTTP_201_CREATED,
 )
 async def register_device(
     device_in: DeviceRegister,
     device_repo: Annotated[DeviceRepository, Depends(get_device_repo)],
     employee_repo: Annotated[EmployeeRepository, Depends(get_employee_repo)],
+    user_manager: Annotated[UserManagerHelper, Depends(get_user_manager_helper)],
+    request: Request,
 ) -> DeviceResponse:
     try:
-        async with httpx.AsyncClient() as client:
-            data = {"token": device_in.token, "password": device_in.password}
-            resp = await client.post(
-                "http://localhost:8000/api/v1/auth/reset-password",
-                json=data,
-            )
 
-            employee = await register_device_logic(
-                device_in, device_repo, employee_repo
-            )
-            return DeviceResponse(
-                device_id=device_in.device_id,
-                model=device_in.model,
-                manufacturer=device_in.manufacturer,
-                employee_name=employee.name,
-            )
+        await user_manager.reset_password(
+            token=device_in.token,
+            password=device_in.password,
+            request=request,
+        )
+
+        employee = await register_device_logic(device_in, device_repo, employee_repo)
+        return DeviceResponse(
+            user_id=device_in.user_id,
+            device_id=device_in.device_id,
+            model=device_in.model,
+            manufacturer=device_in.manufacturer,
+            employee_name=employee.name,
+        )
     except Exception as e:
         logging.error(e)
 
