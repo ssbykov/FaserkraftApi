@@ -49,11 +49,11 @@ async def register_device(
 
         employee = await register_device_logic(device_in, device_repo, employee_repo)
         return DeviceResponse(
-            user_id=device_in.user_id,
+            user_email=employee.user.email,
+            employee_name=employee.name,
             device_id=device_in.device_id,
             model=device_in.model,
             manufacturer=device_in.manufacturer,
-            employee_name=employee.name,
         )
     except Exception as e:
         logging.error(e)

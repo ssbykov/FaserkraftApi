@@ -1,5 +1,6 @@
 from fastapi import HTTPException
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from app.database import Employee, SessionDep
 from app.database.crud.mixines import GetBackNextIdMixin
@@ -14,7 +15,11 @@ class EmployeeRepository(GetBackNextIdMixin[Employee]):
     model = Employee
 
     async def attach_device(self, user_id: int, device: Device) -> Employee:
-        stmt = select(self.model).where(self.model.user_id == user_id)
+        stmt = (
+            select(self.model)
+            .options(selectinload(self.model.user))
+            .where(self.model.user_id == user_id)
+        )
         employee = await self.session.scalar(stmt)
 
         if employee is None:

@@ -31,5 +31,5 @@ class DeviceRegister(DeviceCreate):
 
 
 class DeviceResponse(DeviceBase):
-    user_id: int
+    user_email: str
     employee_name: str
