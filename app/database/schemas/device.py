@@ -1,4 +1,6 @@
+from datetime import datetime
 from typing import ClassVar, Type
+from zoneinfo import ZoneInfo
 
 from app.database import BaseSchema
 from app.database.models import Device
@@ -11,8 +13,8 @@ class DeviceBase(BaseSchema):
 
 
 class DeviceCreate(DeviceBase):
-    pass
-
+    is_active: bool = True
+    created_at: datetime = datetime.now(ZoneInfo("Europe/Moscow"))
     base_class: ClassVar[Type[Device]] = Device
 
 
@@ -30,4 +32,4 @@ class DeviceRegister(DeviceCreate):
 
 class DeviceResponse(DeviceBase):
     user_id: int
-    employee_name: int
+    employee_name: str
