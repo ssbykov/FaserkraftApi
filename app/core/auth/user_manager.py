@@ -57,7 +57,7 @@ class UserManager(IntegerIDMixin, BaseUserManager[User, int]):
 
             data = json.dumps(qr_json, ensure_ascii=False)
 
-            img = qrcode.make(data)
+            img = qrcode.make(data=data, box_size=5)
             byte_io = io.BytesIO()
             img.save(byte_io, format="PNG")
             byte_io.seek(0)
