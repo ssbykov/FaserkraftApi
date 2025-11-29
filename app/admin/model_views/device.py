@@ -12,10 +12,23 @@ class DeviceAdmin(
     name = "Устройство"
     category = "Пользователи"
 
+    column_list = (
+        "model",
+        "employee",
+        "is_active",
+    )
+
     column_labels = {
-        "deviceId": "ID устройства",
+        "device_id": "ID устройства",
         "model": "Модель",
         "manufacturer": "Производитель",
         "is_active": "Активно",
     }
+
+    form_rules = [
+        "is_active",
+        "employee",
+    ]
+
     can_export = False
+    can_create = False
