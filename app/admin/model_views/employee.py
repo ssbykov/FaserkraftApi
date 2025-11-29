@@ -29,6 +29,7 @@ class EmployeeAdmin(
         "role",
         "user",
         "telegram_id",
+        "device_id",
     )
 
     form_rules = [
@@ -36,6 +37,7 @@ class EmployeeAdmin(
         "role",
         "user",
         "telegram_id",
+        "device",
     ]
 
     can_export = False
