@@ -23,7 +23,9 @@ class Employee(BaseWithId):
         ForeignKey("users.id"), nullable=True, unique=True
     )
     user = relationship("User", uselist=False, back_populates=None, viewonly=True)
-    device_id: Mapped[int] = mapped_column(ForeignKey("devices.id"), nullable=True)
+    device_id: Mapped[int] = mapped_column(
+        ForeignKey("devices.id"), nullable=True, unique=True
+    )
     device = relationship("Device", back_populates=None, viewonly=True)
 
     plans = relationship("DailyPlan", back_populates="employee")

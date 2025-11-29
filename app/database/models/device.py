@@ -1,4 +1,5 @@
 from sqlalchemy import Column, String, Boolean, DateTime, func
+from sqlalchemy.orm import relationship
 
 from .base import BaseWithId
 
@@ -12,5 +13,7 @@ class Device(BaseWithId):
     is_active = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
+    employee = relationship("Employee", back_populates="device", uselist=False)
+
     def __repr__(self):
-        return self.device_id
+        return f"{self.id}: {self.device_id}"
