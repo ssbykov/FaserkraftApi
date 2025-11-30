@@ -1,7 +1,9 @@
 import logging
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import ValidationError
+from sqlalchemy.exc import IntegrityError
 from starlette import status
 from starlette.requests import Request
 
@@ -40,7 +42,6 @@ async def register_device(
     request: Request,
 ) -> DeviceResponse:
     try:
-
         await user_manager.reset_password(
             token=device_in.token,
             password=device_in.password,
@@ -48,6 +49,7 @@ async def register_device(
         )
 
         employee = await register_device_logic(device_in, device_repo, employee_repo)
+
         return DeviceResponse(
             user_email=employee.user.email,
             employee_name=employee.name,
@@ -55,8 +57,15 @@ async def register_device(
             model=device_in.model,
             manufacturer=device_in.manufacturer,
         )
+    except HTTPException:
+        # уже правильно сформированный ответ — пробрасываем
+        raise
     except Exception as e:
-        logging.error(e)
+        logging.exception("Error in /new-device: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal error during device registration",
+        )
 
 
 async def register_device_logic(
@@ -64,8 +73,47 @@ async def register_device_logic(
     device_repo: DeviceRepository,
     employee_repo: EmployeeRepository,
 ) -> Employee:
-    new_device = DeviceCreate(**device_in.model_dump())
-    device = await device_repo.create_device(new_device)
-    DeviceRead.model_validate(device)
-    employee = await employee_repo.attach_device(device_in.user_id, device)
-    return employee
+    try:
+        new_device = DeviceCreate(**device_in.model_dump())
+
+        # 1) создаём устройство
+        try:
+            device = await device_repo.create_device(new_device)
+        except IntegrityError as exc:
+            # предполагаем, что сработало уникальное ограничение по device_id
+            logging.exception("IntegrityError on create_device: %s", exc)
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Устройство с таким ID уже зарегистрировано",
+            ) from exc
+
+        # 2) проверяем, что репозиторий вернул корректное устройство
+        try:
+            DeviceRead.model_validate(device)
+        except ValidationError as exc:
+            logging.exception("Device validation error: %s", exc)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Данные устройства в хранилище не соответствуют схеме",
+            ) from exc
+
+        # 3) привязываем устройство к сотруднику
+        employee = await employee_repo.attach_device(device_in.user_id, device)
+        if employee is None:
+            # репозиторий просто вернул None, без исключений
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Сотрудник не найден",
+            )
+
+        return employee
+
+    except HTTPException:
+        # уже сформированный ответ
+        raise
+    except Exception as exc:
+        logging.exception("Error in register_device_logic: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Внутренняя ошибка при регистрации устройства",
+        ) from exc
