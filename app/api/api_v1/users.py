@@ -2,6 +2,7 @@ import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi_users.exceptions import InvalidResetPasswordToken
 from pydantic import ValidationError
 from sqlalchemy.exc import IntegrityError
 from starlette import status
@@ -42,11 +43,18 @@ async def register_device(
     request: Request,
 ) -> DeviceResponse:
     try:
-        await user_manager.reset_password(
-            token=device_in.token,
-            password=device_in.password,
-            request=request,
-        )
+        try:
+            await user_manager.reset_password(
+                token=device_in.token,
+                password=device_in.password,
+                request=request,
+            )
+        except InvalidResetPasswordToken as exc:
+
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid reset password token",
+            ) from exc
 
         employee = await register_device_logic(device_in, device_repo, employee_repo)
 
