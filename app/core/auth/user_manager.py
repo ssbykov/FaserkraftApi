@@ -1,10 +1,7 @@
-import io
-import json
 import logging
 import re
 from typing import Optional, TYPE_CHECKING, Union
 
-import qrcode
 from fastapi_users import (
     BaseUserManager,
     IntegerIDMixin,
@@ -15,6 +12,7 @@ from fastapi_users.schemas import UC
 from app.core import settings, config
 from app.database.models import User
 from app.tasks import run_process_mail
+from app.utils.qr_code_gentrator import generate_qr_code
 
 logger = logging.getLogger(__name__)
 
@@ -54,17 +52,11 @@ class UserManager(IntegerIDMixin, BaseUserManager[User, int]):
             run_process_mail.delay(None, context=context, action="forgot_password")
         elif suffix_path == "generate-qr":
             qr_json = {"action": "register", "id": user.id, "token": token}
-
-            data = json.dumps(qr_json, ensure_ascii=False)
-
-            img = qrcode.make(data=data, box_size=5)
-            byte_io = io.BytesIO()
-            img.save(byte_io, format="PNG")
-            byte_io.seek(0)
+            qr_code_bytes = generate_qr_code(qr_json)
             context = {
                 "name": user.email,
                 "user_email": user.email,
-                "qr_code_bytes": byte_io.getvalue(),
+                "qr_code_bytes": qr_code_bytes,
             }
             run_process_mail.delay(None, context=context, action="send_qr")
 
