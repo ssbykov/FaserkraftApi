@@ -58,9 +58,10 @@ class ProductRepository(GetBackNextIdMixin[Product]):
         stmt = (
             select(self.model)
             .options(
+                joinedload(self.model.process),
                 joinedload(self.model.steps)
                 .joinedload(ProductStep.step_definition)
-                .joinedload(StepDefinition.template)
+                .joinedload(StepDefinition.template),
             )
             .where(self.model.serial_number == serial_number)
         )
