@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.exc import IntegrityError
 from starlette import status
 
-from app.api.api_v1.fastapi_users import current_super_user
+from app.api.api_v1.fastapi_users import current_user
 from app.core import settings
 from app.database.crud.products import ProductRepository, get_product_repo
 from app.database.models import User
@@ -23,7 +23,7 @@ router.include_router(
 async def create_product(
     product_in: ProductCreate,
     repo: Annotated[ProductRepository, Depends(get_product_repo)],
-    user: Annotated[User, Depends(current_super_user)],
+    user: Annotated[User, Depends(current_user)],
 ) -> ProductCreateOut:
     try:
         product = await repo.create_product(product_in)
@@ -85,7 +85,7 @@ async def create_product(
 async def get_product(
     serial_number: str,
     repo: Annotated[ProductRepository, Depends(get_product_repo)],
-    user: Annotated[User, Depends(current_super_user)],
+    user: Annotated[User, Depends(current_user)],
 ) -> ProductRead:
     try:
         product = await repo.get(serial_number)
