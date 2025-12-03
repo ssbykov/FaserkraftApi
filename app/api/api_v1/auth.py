@@ -5,6 +5,7 @@ from fastapi.requests import Request
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.templating import Jinja2Templates
 from fastapi_users.exceptions import InvalidVerifyToken, UserAlreadyVerified
+from pydantic import BaseModel
 from starlette import status
 from starlette.templating import _TemplateResponse
 
@@ -66,17 +67,21 @@ def get_admin(request: Request) -> "NewAdmin":
     return request.app.state.admin.authentication_backend
 
 
+class LoginData(BaseModel):
+    username: str
+    password: str
+
+
 @router.post("/login_json")
 async def login_json(
-    username: str,
-    password: str,
+    data: LoginData,
     user_manager: Annotated[UserManagerHelper, Depends(get_user_manager_helper)],
     auth_backend: Annotated["NewAdmin", Depends(get_admin)],
 ):
 
     credentials = OAuth2PasswordRequestForm(
-        username=username,
-        password=password,
+        username=data.username,
+        password=data.password,
     )
 
     user = await user_manager.get_user(credentials=credentials)
