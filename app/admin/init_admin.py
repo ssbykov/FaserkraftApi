@@ -31,7 +31,7 @@ from .model_views import (
 )
 
 
-async def init_admin(app: Any) -> None:
+async def init_admin(app: Any) -> "NewAdmin":
     admin = NewAdmin(
         app,
         db_helper.engine,
@@ -50,6 +50,8 @@ async def init_admin(app: Any) -> None:
     admin.add_view(DeviceAdmin)
     assert isinstance(admin.authentication_backend, AdminAuth)
     await admin.authentication_backend.create_superuser()
+
+    return admin
 
 
 class NewAdmin(Admin):

@@ -14,7 +14,8 @@ from app.database import db_helper
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await db_helper.synch_backups()
-    await init_admin(app)
+    admin = await init_admin(app)
+    app.state.admin = admin
     yield
     await db_helper.dispose()
 
