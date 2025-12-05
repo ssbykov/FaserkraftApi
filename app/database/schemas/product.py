@@ -6,7 +6,7 @@ from pydantic import Field
 
 from app.database import BaseSchema, Product
 from app.database.schemas.process import ProcessRead
-from app.database.schemas.product_step import ProductStepOut
+from app.database.schemas.product_step import ProductStepRead
 
 
 class ProductBase(BaseSchema):
@@ -31,6 +31,6 @@ class ProductRead(ProductBase):
     id: int
     process: ProcessRead
     created_at: datetime
-    steps: Optional[List["ProductStepOut"]]
+    steps: Optional[List["ProductStepRead"]]
 
     model_config = {"from_attributes": True}
