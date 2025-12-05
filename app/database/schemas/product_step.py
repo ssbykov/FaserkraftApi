@@ -22,5 +22,6 @@ class ProductStepRead(ProductStepBase):
     step_definition: StepDefinitionOut
 
 
-class ProductStepUpdate(ProductStepBase):
-    pass
+class ProductStepUpdate(BaseSchema):
+    id: int
+    performed_by: str
