@@ -61,8 +61,8 @@ class ProductRepository(GetBackNextIdMixin[Product]):
                 joinedload(self.model.process),
                 joinedload(self.model.steps)
                 .joinedload(ProductStep.step_definition)
-                .joinedload(ProductStep.performed_by)
                 .joinedload(StepDefinition.template),
+                joinedload(self.model.steps).joinedload(ProductStep.performed_by),
             )
             .where(self.model.serial_number == serial_number)
         )
