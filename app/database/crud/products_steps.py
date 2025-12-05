@@ -37,9 +37,9 @@ class ProductStepRepository(GetBackNextIdMixin[ProductStep]):
         if prev_step and prev_step.status != StepStatus.done:
             raise ValueError("Нельзя принять этот этап, пока предыдущий не завершён.")
 
-        step.status = StepStatus.accepted
-        step.accepted_by_id = employee_id
-        step.accepted_at = datetime.now(ZoneInfo("Europe/Moscow"))
+        step.status = StepStatus.done
+        step.performed_by_id = employee_id
+        step.performed_at = datetime.now(ZoneInfo("Europe/Moscow"))
 
         try:
             await self.session.commit()

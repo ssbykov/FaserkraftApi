@@ -1,14 +1,16 @@
-from typing import Annotated
+from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from starlette import status
 
 from app.core import settings
 from app.database.crud.employees import EmployeeRepository, get_employee_repo
+from app.database.crud.products import get_product_repo, ProductRepository
 from app.database.crud.products_steps import (
     ProductStepRepository,
     get_products_steps_repo,
 )
+from app.database.schemas.product import ProductRead
 from app.database.schemas.product_step import ProductStepUpdate, ProductStepBase
 
 router = APIRouter(
@@ -20,18 +22,23 @@ router.include_router(
 )
 
 
-@router.post("/", response_model=ProductStepBase, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=ProductRead, status_code=status.HTTP_201_CREATED)
 async def accept_step(
     step: ProductStepUpdate,
     repo: Annotated[ProductStepRepository, Depends(get_products_steps_repo)],
     employee_repo: Annotated[EmployeeRepository, Depends(get_employee_repo)],
-) -> ProductStepBase:
+    product_repo: Annotated[ProductRepository, Depends(get_product_repo)],
+) -> Optional[ProductRead]:
     try:
         employee_id = await employee_repo.get_employee_id_by_email(step.performed_by)
         step = await repo.accept_step(step.id, employee_id)
         if step is None:
             raise HTTPException(status_code=404, detail="Шаг не найден")
-        return ProductStepBase.model_validate(step)
+
+        if step.status == "done":
+            product = await product_repo.get(id=step.product_id)
+            return ProductRead.model_validate(product)
+
     except HTTPException:
         raise
     except Exception as e:
