@@ -1,3 +1,5 @@
+from typing import Any, Optional
+
 from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import joinedload, selectinload
@@ -54,23 +56,37 @@ class ProductRepository(GetBackNextIdMixin[Product]):
         await self.session.refresh(product)
         return product
 
-    async def get(self, serial_number: str) -> Product:
-        stmt = (
-            select(self.model)
-            .options(
-                joinedload(self.model.process),
-                joinedload(self.model.steps)
-                .joinedload(ProductStep.step_definition)
-                .joinedload(StepDefinition.template),
-                joinedload(self.model.steps).joinedload(ProductStep.performed_by),
-            )
-            .where(self.model.serial_number == serial_number)
+    async def get(
+        self,
+        *,
+        id: Optional[int] = None,
+        serial_number: Optional[str] = None,
+    ) -> Product:
+        if id is None and serial_number is None:
+            raise ValueError("Нужно указать id или serial_number")
+        if id is not None and serial_number is not None:
+            raise ValueError("Укажи только одно из: id или serial_number")
+
+        stmt = select(self.model).options(
+            joinedload(self.model.process),
+            joinedload(self.model.steps)
+            .joinedload(ProductStep.step_definition)
+            .joinedload(StepDefinition.template),
+            joinedload(self.model.steps).joinedload(ProductStep.performed_by),
         )
+
+        if id is not None:
+            stmt = stmt.where(self.model.id == id)
+        else:
+            stmt = stmt.where(self.model.serial_number == serial_number)
+
         product = await self.session.scalar(stmt)
+
         if product is not None:
             return product
 
+        ident = id if id is not None else serial_number
         raise HTTPException(
             status_code=404,
-            detail=f"Продукт с серийным номером {serial_number} не найден",
+            detail=f"Продукт с идентификатором {ident} не найден",
         )

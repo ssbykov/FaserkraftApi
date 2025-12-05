@@ -88,7 +88,7 @@ async def get_product(
     user: Annotated[User, Depends(current_user)],
 ) -> ProductRead:
     try:
-        product = await repo.get(serial_number)
+        product = await repo.get(serial_number=serial_number)
         return ProductRead.model_validate(product)
     except HTTPException as exc:
         # пробрасываем 404 и другие осознанные HTTP-ошибки
