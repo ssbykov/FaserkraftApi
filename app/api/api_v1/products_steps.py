@@ -1,3 +1,4 @@
+import traceback
 from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -10,6 +11,7 @@ from app.database.crud.products_steps import (
     ProductStepRepository,
     get_products_steps_repo,
 )
+from app.database.models.product_step import StepStatus
 from app.database.schemas.product import ProductRead
 from app.database.schemas.product_step import ProductStepUpdate, ProductStepBase
 
@@ -35,11 +37,16 @@ async def accept_step(
         if step is None:
             raise HTTPException(status_code=404, detail="Шаг не найден")
 
-        if step.status == "done":
+        if step.status == StepStatus.done:
             product = await product_repo.get(id=step.product_id)
             return ProductRead.model_validate(product)
 
-    except HTTPException:
-        raise
+        return None
+
+    # except HTTPException:
+    #     raise
+    # except Exception as e:
+    #     raise HTTPException(status_code=500, detail="Произошла внутренняя ошибка")
     except Exception as e:
-        raise HTTPException(status_code=500, detail="Произошла внутренняя ошибка")
+        traceback.print_exc()
+        raise
