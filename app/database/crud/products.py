@@ -52,6 +52,7 @@ class ProductRepository(GetBackNextIdMixin[Product]):
             raise
 
         # 5) перечитываем продукт с нужными relation
+        await self.session.refresh(product)
         created = await self.get(id=product.id)
         return created
 
