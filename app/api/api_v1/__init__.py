@@ -5,6 +5,7 @@ from app.core import settings
 from .auth import router as auth_router
 from .users import router as users_router
 from .products import router as products_router
+from .processes import router as processes_router
 from .products_steps import router as products_steps_router
 
 http_bearer = HTTPBearer(auto_error=False)
@@ -19,4 +20,5 @@ router = APIRouter(
 router.include_router(router=auth_router)
 router.include_router(router=users_router)
 router.include_router(router=products_router)
+router.include_router(router=processes_router)
 router.include_router(router=products_steps_router)
