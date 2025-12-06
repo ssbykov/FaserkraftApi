@@ -21,12 +21,6 @@ class ProductCreate(ProductBase):
     base_class: ClassVar[Type[Product]] = Product
 
 
-class ProductCreateOut(ProductBase):
-    id: int
-    created_at: datetime
-    model_config = {"from_attributes": True}
-
-
 class ProductRead(ProductBase):
     id: int
     process: ProcessRead

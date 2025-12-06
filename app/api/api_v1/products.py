@@ -8,7 +8,7 @@ from app.api.api_v1.fastapi_users import current_user
 from app.core import settings
 from app.database.crud.products import ProductRepository, get_product_repo
 from app.database.models import User
-from app.database.schemas.product import ProductRead, ProductCreate, ProductCreateOut
+from app.database.schemas.product import ProductRead, ProductCreate
 
 router = APIRouter(
     tags=["Products"],
@@ -19,15 +19,15 @@ router.include_router(
 )
 
 
-@router.post("/", response_model=ProductCreateOut, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=ProductRead, status_code=status.HTTP_201_CREATED)
 async def create_product(
     product_in: ProductCreate,
     repo: Annotated[ProductRepository, Depends(get_product_repo)],
     user: Annotated[User, Depends(current_user)],
-) -> ProductCreateOut:
+) -> ProductRead:
     try:
         product = await repo.create_product(product_in)
-        return ProductCreateOut.model_validate(product)
+        return ProductRead.model_validate(product)
 
     except IntegrityError as e:
         msg = str(e.orig)

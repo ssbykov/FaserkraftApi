@@ -18,24 +18,23 @@ class ProductRepository(GetBackNextIdMixin[Product]):
     model = Product
 
     async def create_product(self, product_in: ProductCreate) -> Product:
-        # 1️⃣ создаём продукт
+        # 1) создаём продукт
         product = product_in.to_orm()
         self.session.add(product)
 
         # получаем product.id, но ещё не коммитим
         await self.session.flush()
 
-        # 2️⃣ подтягиваем процесс с шагами
+        # 2) подтягиваем процесс с шагами (явно)
         process = await self.session.get(
             Process,
             product_in.process_id,
             options=[selectinload(Process.steps)],
         )
         if process is None:
-            # Можно кинуть ValueError, её перехватит эндпоинт
             raise ValueError("Процесс с таким process_id не найден")
 
-        # 3️⃣ создаём шаги продукта
+        # 3) создаём шаги продукта
         for step_def in process.steps:
             self.session.add(
                 ProductStep(
@@ -45,16 +44,16 @@ class ProductRepository(GetBackNextIdMixin[Product]):
                 )
             )
 
-        # 4️⃣ коммитим транзакцию
+        # 4) коммитим транзакцию
         try:
             await self.session.commit()
         except Exception:
             await self.session.rollback()
             raise
 
-        # 5️⃣ при необходимости обновляем объект
-        await self.session.refresh(product)
-        return product
+        # 5) перечитываем продукт с нужными relation
+        created = await self.get(id=product.id)
+        return created
 
     async def get(
         self,
