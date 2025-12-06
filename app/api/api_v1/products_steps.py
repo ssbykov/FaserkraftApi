@@ -1,9 +1,9 @@
-import traceback
 from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from starlette import status
 
+from app.api.api_v1.fastapi_users import current_user
 from app.core import settings
 from app.database.crud.employees import EmployeeRepository, get_employee_repo
 from app.database.crud.products import get_product_repo, ProductRepository
@@ -11,9 +11,10 @@ from app.database.crud.products_steps import (
     ProductStepRepository,
     get_products_steps_repo,
 )
+from app.database.models import User
 from app.database.models.product_step import StepStatus
 from app.database.schemas.product import ProductRead
-from app.database.schemas.product_step import ProductStepUpdate, ProductStepBase
+from app.database.schemas.product_step import ProductStepUpdate
 
 router = APIRouter(
     tags=["Products_Steps"],
@@ -30,6 +31,7 @@ async def accept_step(
     repo: Annotated[ProductStepRepository, Depends(get_products_steps_repo)],
     employee_repo: Annotated[EmployeeRepository, Depends(get_employee_repo)],
     product_repo: Annotated[ProductRepository, Depends(get_product_repo)],
+    user: Annotated[User, Depends(current_user)],
 ) -> Optional[ProductRead]:
     try:
         employee_id = await employee_repo.get_employee_id_by_email(step.performed_by)
@@ -43,10 +45,10 @@ async def accept_step(
 
         return None
 
-    # except HTTPException:
-    #     raise
-    # except Exception as e:
-    #     raise HTTPException(status_code=500, detail="Произошла внутренняя ошибка")
-    except Exception as e:
-        traceback.print_exc()
+    except HTTPException:
         raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Произошла внутренняя ошибка {e}")
+    # except Exception as e:
+    #     traceback.print_exc()
+    #     raise
