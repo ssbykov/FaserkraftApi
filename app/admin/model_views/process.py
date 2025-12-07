@@ -1,9 +1,12 @@
 from typing import Any
 
+from sqladmin import action
 from sqlalchemy.orm import selectinload
+from starlette.requests import Request
+from starlette.responses import RedirectResponse
 
 from app.admin.custom_model_view import CustomModelView
-from app.database import Process, StepDefinition
+from app.database import Process, StepDefinition, db_helper
 from app.database.crud.processes import ProcessRepository
 
 
@@ -35,7 +38,6 @@ class ProcessAdmin(
     form_rules = [
         "name",
         "description",
-        "steps",
     ]
 
     can_edit = True
@@ -61,3 +63,20 @@ class ProcessAdmin(
             selectinload(Process.steps).selectinload(StepDefinition.template)
         )
         return await self._get_object_by_pk(stmt)
+
+    action_in_header = ["copy-process"]
+
+    @action(
+        name="copy-process",
+        label="Скопировать процесс",
+        add_in_detail=True,
+        add_in_list=False,
+        confirmation_message=f"Создать копию процесса?",
+    )
+    async def generate_qr(self, request: Request) -> RedirectResponse:
+        if pks := request.query_params["pks"]:
+            async for session in db_helper.get_session():
+                repo = self.repo_type(session)
+                await repo.copy_process(process_id=int(pks))
+
+        return RedirectResponse(request.url_for("admin:list", identity=self.identity))
