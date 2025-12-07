@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 import os
 import subprocess
@@ -10,6 +11,8 @@ import aiohttp
 
 from app.core import settings
 from app.database import db_helper
+from app.database.crud.yandex_tokens import YandexTokensRepository
+from app.database.yandex_disk import create_yadisk_instance
 
 if TYPE_CHECKING:
     from app.core.config import DbSettings
@@ -21,6 +24,7 @@ def generate_dump_name(db_name: str) -> str:
 
 
 def create_pgpass_file(pgpass_path: str, db: "DbSettings") -> None:
+    Path(pgpass_path).parent.mkdir(parents=True, exist_ok=True)
     with open(pgpass_path, "w") as f:
         f.write(f"{db.host}:{db.port}:{db.database}:{db.user}:{db.password}\n")
     os.chmod(pgpass_path, 0o600)
@@ -135,68 +139,14 @@ async def restore_database_from_dump(dump_file: str) -> None:
         remove_pgpass_file(pgpass_path)
 
 
-class YaDisk:
-    API_URL = "https://cloud-api.yandex.net/v1/disk/resources"
-
-    def __init__(self) -> None:
-        self.token = settings.yandex_disk.token
-        self.headers = {
-            "Content-Type": "application/json",
-            "Authorization": "OAuth {}".format(self.token),
-        }
-        self.folder_name = "db_backup"
-
-    async def _create_folder(self, session: aiohttp.ClientSession) -> None:
-        try:
-            async with session.put(
-                self.API_URL, headers=self.headers, params={"path": self.folder_name}
-            ) as response:
-                if response.status not in (201, 409):
-                    raise Exception(f"Статус: {response.status}")
-        except Exception as e:
-            logging.error(f"Ошибка при создании папки на Яндекс.Диске: {e}")
-
-    async def get_upload_url(
-        self, session: aiohttp.ClientSession, file_name: str
-    ) -> str | None:
-        upload_url = self.API_URL + "/upload"
-        params = {"path": f"{self.folder_name}/{file_name}", "overwrite": "true"}
-        try:
-            async with session.get(
-                upload_url, headers=self.headers, params=params
-            ) as response:
-                if response.status != 200:
-                    raise Exception(f"Статус: {response.status}")
-                data = await response.json()
-                return str(data.get("href", ""))
-        except Exception as e:
-            logging.error(f"Ошибка при получении ссылки для загрузки файла: {e}")
-            return None
-
-    async def copy_photos_to_disk(self, file_name: str) -> None:
-        async with aiohttp.ClientSession() as session:
-            await self._create_folder(session)
-            upload_url = await self.get_upload_url(session, file_name)
-            if not upload_url:
-                return None
-
-            file_path = os.path.join(settings.db.backups_dir, file_name)
-            try:
-                with open(file_path, "rb") as f:
-                    async with session.put(upload_url, data=f) as response:
-                        if response.status != 201:
-                            raise Exception(f"Статус:{response.status}")
-                        return None
-            except Exception as e:
-                logging.error(f"Ошибка при загрузке файла: {e}")
-                return None
-
-
 async def create_backup() -> str | None:
     if dump_file := await create_database_dump():
-        yadisk = YaDisk()
-        await yadisk.copy_photos_to_disk(dump_file)
-        await db_helper.synch_backups()
+        async for session in db_helper.get_session():
+            tokens_repo = YandexTokensRepository(session)
+            yadisk = await create_yadisk_instance(tokens_repo=tokens_repo)
+            await yadisk.copy_photos_to_disk(dump_file)
+            await db_helper.synch_backups()
+            break
     return dump_file
 
 
