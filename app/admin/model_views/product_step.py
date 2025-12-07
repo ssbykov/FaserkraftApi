@@ -1,10 +1,12 @@
 from typing import Any
-from zoneinfo import ZoneInfo
 
 from sqlalchemy.orm import selectinload
-from starlette.requests import Request
 
 from app.admin.custom_model_view import CustomModelView
+from app.admin.filters.product_step import (
+    ProductStepPerformerFilter,
+    ProductStepStatusFilter,
+)
 from app.admin.utils import format_datetime
 from app.database import ProductStep, StepDefinition
 from app.database.crud.products_steps import ProductStepRepository
@@ -17,6 +19,9 @@ class ProductStepAdmin(
     repo_type = ProductStepRepository
     name_plural = "Этапы изделий"
     name = "Этап изделия"
+    category = "Раздел изделий"
+
+    column_list = ("product", "process", "status", "performed_by")
 
     column_labels = {
         "product": "Изделие",
@@ -38,12 +43,11 @@ class ProductStepAdmin(
         "performed_at",
     )
 
+    column_filters = [ProductStepPerformerFilter(), ProductStepStatusFilter()]
+
     can_edit = True
     can_delete = True
     can_export = False
-
-    def is_visible(self, request: Request) -> bool:
-        return False
 
     def format_steps(self, _) -> str:
         if isinstance(self, ProductStep):
