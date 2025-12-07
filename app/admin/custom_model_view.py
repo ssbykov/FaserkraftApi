@@ -1,6 +1,8 @@
 from typing import Type, Any, Generic, cast, Tuple
 
 from sqladmin import action, ModelView
+from sqlalchemy import Select, select, func
+from sqlalchemy.orm import selectinload
 from starlette.requests import Request
 from starlette.responses import RedirectResponse
 
@@ -61,6 +63,30 @@ class CustomModelView(ModelView, Generic[T]):
                 conditions.append(getattr(self.model, "user_id") == user.get("id"))
             return await repo.get_count_items(conditions)
         return None
+
+    async def count(self, request: Request, stmt: Select | None = None) -> int:
+        # если stmt не передали (ветка без search в list),
+        # строим его так же, как в list(), но без limit/offset
+        if stmt is None:
+            stmt = self.list_query(request)
+
+            # связи, как в list()
+            for relation in self._list_relations:
+                stmt = stmt.options(selectinload(relation))
+
+            # фильтры
+            for flt in self.get_filters():
+                value = request.query_params.get(flt.parameter_name)
+                if value:
+                    stmt = await flt.get_filtered_query(stmt, value, self.model)
+
+            # сортировка для count не важна, можно не трогать sort_query
+
+        # поиск уже учтён, если вызвали из list со stmt
+        count_stmt = select(func.count()).select_from(stmt.subquery())
+        rows = await self._run_query(count_stmt)
+        return rows[0]
+
 
     async def get_item_position(self, request: Request) -> dict[str, int | Any]:
         async for session in db_helper.get_session():
