@@ -65,7 +65,9 @@ class EmailSettings(BaseModel):
 
 
 class YandexDiskSettings(BaseModel):
-    token: str
+    client_id: str
+    client_secret: str
+    refresh_token: str
 
 
 class DbSettings(BaseSettings):
