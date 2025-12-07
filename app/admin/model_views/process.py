@@ -17,7 +17,7 @@ class ProcessAdmin(
     repo_type = ProcessRepository
     name_plural = "Процессы"
     name = "Процесс"
-    icon = "fa-solid fa-diagram-project"
+    # icon = "fa-solid fa-diagram-project"
     category = "Раздел процессов"
     category_icon = "fa-solid fa-cog"
 

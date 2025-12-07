@@ -16,7 +16,8 @@ class ProductAdmin(
     repo_type = ProductRepository
     name_plural = "Изделия"
     name = "Изделие"
-    icon = "fa-solid fa-battery-three-quarters"
+    category = "Раздел изделий"
+    category_icon = "fa-solid fa-battery-three-quarters"
 
     column_list = ("serial_number", "process", "created_at")
 
