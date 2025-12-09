@@ -7,6 +7,8 @@ from .product import ProductAdmin
 from .product_step import ProductStepAdmin
 from .employee import EmployeeAdmin
 from .device import DeviceAdmin
+from .daily_plan import DailyPlanAdmin
+from .daily_plan_step import DailyPlanStepAdmin
 
 __all__ = [
     "BackupDbAdmin",
@@ -18,4 +20,6 @@ __all__ = [
     "ProductStepAdmin",
     "EmployeeAdmin",
     "DeviceAdmin",
+    "DailyPlanAdmin",
+    "DailyPlanStepAdmin",
 ]

@@ -11,6 +11,7 @@ from .step_template import StepTemplate
 from .daily_plan import DailyPlan
 from .device import Device
 from .yandex_token import YandexToken
+from .daily_plan_step import DailyPlanStep
 
 __all__ = [
     "BaseWithId",
@@ -27,4 +28,5 @@ __all__ = [
     "BackupDb",
     "Device",
     "YandexToken",
+    "DailyPlanStep",
 ]

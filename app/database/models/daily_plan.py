@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, ForeignKey, Date, UniqueConstraint, Text
+from sqlalchemy import Column, Integer, ForeignKey, Date
 from sqlalchemy.orm import relationship
 
 from .base import BaseWithId
@@ -9,14 +9,21 @@ class DailyPlan(BaseWithId):
 
     employee_id = Column(Integer, ForeignKey("employees.id"), nullable=False)
     date = Column(Date, nullable=False)
-    planned_steps = Column(Integer, nullable=False, default=0)
-    actual_steps = Column(Integer, nullable=False, default=0)
 
     employee = relationship("Employee", back_populates="plans")
+    steps = relationship(
+        "DailyPlanStep",
+        back_populates="daily_plan",
+        cascade="all, delete-orphan",
+    )
+
+    @property
+    def planned_total(self) -> int:
+        return sum(s.planned_quantity for s in self.steps)
+
+    @property
+    def actual_total(self) -> int:
+        return sum(s.actual_quantity for s in self.steps)
 
     def __repr__(self):
-        return (
-            f"<DailyPlan(employee={self.employee_id}, "
-            f"date={self.date.date() if self.date else None}, "
-            f"plan={self.planned_steps}, fact={self.actual_steps})>"
-        )
+        return f"План: на {self.date}, сотрудник {self.employee_id}"
