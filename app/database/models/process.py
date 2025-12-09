@@ -12,7 +12,7 @@ class Process(BaseWithId):
 
     steps = relationship(
         "StepDefinition",
-        backref="work_process",
+        back_populates="process",
         cascade="all, delete-orphan",
         order_by="StepDefinition.order",
     )

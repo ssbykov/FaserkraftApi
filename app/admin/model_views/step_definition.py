@@ -10,22 +10,21 @@ class StepDefinitionAdmin(
     repo_type = StepDefinitionRepository
     name_plural = "Этапы"
     name = "Этап"
-    # icon = "fa-solid fa-list"
     category = "Раздел процессов"
 
     column_labels = {
-        "work_process": "Процесс",
+        "process": "Процесс",
         "template": "Шаблон",
         "order": "Порядок",
     }
 
     column_list = (
         "template",
-        "work_process",
+        "process",
     )
 
     column_details_list = (
-        "work_process",
+        "process",
         "template",
         "order",
     )
@@ -33,7 +32,7 @@ class StepDefinitionAdmin(
     form_rules = [
         "template",
         "order",
-        "work_process",
+        "process",
     ]
 
     can_edit = True
