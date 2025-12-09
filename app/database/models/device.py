@@ -1,3 +1,5 @@
+from zoneinfo import ZoneInfo
+
 from sqlalchemy import Column, String, Boolean, DateTime, func
 from sqlalchemy.orm import relationship
 
@@ -16,4 +18,7 @@ class Device(BaseWithId):
     employee = relationship("Employee", back_populates="device", uselist=False)
 
     def __repr__(self):
-        return f"{self.id}: {self.device_id}"
+        created_at = self.created_at.astimezone(ZoneInfo("Europe/Moscow")).strftime(
+            "%Y-%m-%d %H:%M:%S"
+        )
+        return f"id: {self.id}, модель: {self.model}, регистрация: {created_at}"

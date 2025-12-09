@@ -18,11 +18,15 @@ class DeviceAdmin(
         "is_active",
     )
 
+    column_details_exclude_list = ("id",)
+
     column_labels = {
+        "employee": "Сотрудник",
         "device_id": "ID устройства",
         "model": "Модель",
         "manufacturer": "Производитель",
         "is_active": "Активно",
+        "created_at": "Зарегистрировано",
     }
 
     form_rules = [
