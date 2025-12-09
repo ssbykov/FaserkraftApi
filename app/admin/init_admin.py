@@ -28,6 +28,8 @@ from .model_views import (
     ProductStepAdmin,
     EmployeeAdmin,
     DeviceAdmin,
+    DailyPlanAdmin,
+    DailyPlanStepAdmin,
 )
 
 
@@ -48,6 +50,8 @@ async def init_admin(app: Any) -> "NewAdmin":
     admin.add_view(EmployeeAdmin)
     admin.add_view(ProductStepAdmin)
     admin.add_view(DeviceAdmin)
+    admin.add_view(DailyPlanAdmin)
+    admin.add_view(DailyPlanStepAdmin)
     assert isinstance(admin.authentication_backend, AdminAuth)
     await admin.authentication_backend.create_superuser()
 
