@@ -12,12 +12,12 @@ class Process(BaseWithId):
 
     steps = relationship(
         "StepDefinition",
-        back_populates="process",
+        back_populates="work_process",
         cascade="all, delete-orphan",
         order_by="StepDefinition.order",
     )
 
-    products = relationship("Product", back_populates="process")
+    products = relationship("Product", back_populates="work_process")
 
     def __repr__(self):
         return self.name

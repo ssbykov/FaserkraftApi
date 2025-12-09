@@ -31,4 +31,4 @@ class ProcessNameFilter:
             return query
         from app.database import Product  # Импортируйте здесь, чтобы избежать циклов
 
-        return query.filter(Product.process.has(name=value))
+        return query.filter(Product.work_process.has(name=value))

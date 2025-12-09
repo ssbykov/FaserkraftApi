@@ -50,7 +50,9 @@ class DailyPlanStepAdmin(
 
     def format_step_definition(self, _) -> str:
         if isinstance(self, DailyPlanStep):
-            return f"{self.step_definition.template} - {self.step_definition.process}"
+            return (
+                f"{self.step_definition.template} - {self.step_definition.work_process}"
+            )
         return ""
 
     column_formatters_detail = {
@@ -93,7 +95,7 @@ class DailyPlanStepAdmin(
                 StepDefinition.template
             ),
             selectinload(DailyPlanStep.step_definition).selectinload(
-                StepDefinition.process
+                StepDefinition.work_process
             ),
         )
         return stmt
@@ -108,7 +110,7 @@ class DailyPlanStepAdmin(
                 StepDefinition.template
             ),
             selectinload(DailyPlanStep.step_definition).selectinload(
-                StepDefinition.process
+                StepDefinition.work_process
             ),
         )
 

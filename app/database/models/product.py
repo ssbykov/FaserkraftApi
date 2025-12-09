@@ -17,7 +17,7 @@ class Product(BaseWithId):
     process_id = Column(ForeignKey("processes.id"), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
-    process = relationship("Process", back_populates="products")
+    work_process = relationship("Process", back_populates="products")
     steps = relationship(
         "ProductStep",
         back_populates="product",

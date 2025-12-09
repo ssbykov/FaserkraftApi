@@ -68,7 +68,7 @@ class ProductRepository(GetBackNextIdMixin[Product]):
             raise ValueError("Укажи только одно из: id или serial_number")
 
         stmt = select(self.model).options(
-            joinedload(self.model.process),
+            joinedload(self.model.work_process),
             joinedload(self.model.steps)
             .joinedload(ProductStep.step_definition)
             .joinedload(StepDefinition.template),

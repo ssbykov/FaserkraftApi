@@ -20,19 +20,25 @@ class StepDefinitionAdmin(
 
     column_list = (
         "template",
-        "process",
+        "work_process",
     )
 
     column_details_list = (
-        "process",
+        "work_process",
         "template",
         "order",
     )
 
-    form_rules = [
-        "template",
-        "order",
-        "process",
+    form_args = {
+        "work_process": {
+            "label": "Процесс",
+        }
+    }
+
+    form_columns = [
+        StepDefinition.template,
+        StepDefinition.order,
+        StepDefinition.work_process,
     ]
 
     can_edit = True

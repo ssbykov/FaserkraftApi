@@ -13,7 +13,7 @@ class StepDefinition(BaseWithId):
 
     template = relationship("StepTemplate", back_populates="definitions")
     product_steps = relationship("ProductStep", back_populates="step_definition")
-    process = relationship("Process", back_populates="steps")
+    work_process = relationship("Process", back_populates="steps")
 
     steps = relationship(
         "DailyPlanStep",

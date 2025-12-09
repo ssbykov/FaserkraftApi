@@ -53,7 +53,7 @@ class DailyPlanAdmin(
     def format_steps(self, _):
         return [
             f"{getattr(sd := s.step_definition, 'template', None)}: "
-            f"{getattr(getattr(sd, 'process', None), 'name', '-')}"
+            f"{getattr(getattr(sd, 'work_process', None), 'name', '-')}"
             for s in getattr(self, "steps", []) or []
         ]
 
@@ -70,7 +70,7 @@ class DailyPlanAdmin(
             .selectinload(StepDefinition.template),
             selectinload(DailyPlan.steps)
             .selectinload(DailyPlanStep.step_definition)
-            .selectinload(StepDefinition.process),
+            .selectinload(StepDefinition.work_process),
         )
 
         return await self._get_object_by_pk(stmt)
