@@ -17,7 +17,13 @@ class EmployeeAdmin(
     name = "Сотрудник"
     category = "Пользователи"
 
-    column_labels = {"name": "Имя", "role": "Роль", "user": "Пользователь"}
+    column_labels = {
+        "name": "Имя",
+        "role": "Роль",
+        "user": "Пользователь",
+        "device": "Устройство",
+        "telegram_id": "Телеграмм",
+    }
 
     column_list = (
         "name",
