@@ -10,7 +10,6 @@ class StepTemplateAdmin(
     repo_type = StepTemplateRepository
     name_plural = "Шаблоны этапов"
     name = "Шаблон этапа"
-    # icon = "fa-solid fa-bars"
     category = "Раздел процессов"
 
     column_list = ("name", "description")

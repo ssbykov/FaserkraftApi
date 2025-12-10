@@ -10,7 +10,12 @@ class DailyPlan(BaseWithId):
     employee_id = Column(Integer, ForeignKey("employees.id"), nullable=False)
     date = Column(Date, nullable=False)
 
-    employee = relationship("Employee", back_populates="plans")
+    lazy = ("selectin",)
+    employee = relationship(
+        "Employee",
+        back_populates="plans",
+        lazy="selectin",
+    )
     steps = relationship(
         "DailyPlanStep",
         back_populates="daily_plan",
@@ -26,4 +31,4 @@ class DailyPlan(BaseWithId):
         return sum(s.actual_quantity for s in self.steps)
 
     def __repr__(self):
-        return f"План: на {self.date}, сотрудник {self.employee_id}"
+        return f"{self.employee} - {self.date}"

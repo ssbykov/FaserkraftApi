@@ -35,3 +35,10 @@ class DailyPlanStep(BaseWithId):
         back_populates="steps",
         lazy="selectin",
     )
+
+    @property
+    def work_process(self):
+        return f"{self.step_definition.work_process}"
+
+    def __repr__(self):
+        return f"{self.step_definition} - {self.step_definition.work_process}, план: {self.planned_quantity} шт."

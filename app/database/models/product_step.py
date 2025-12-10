@@ -45,7 +45,9 @@ class ProductStep(BaseWithId):
     performed_at = Column(DateTime(timezone=True), nullable=True)
 
     product = relationship("Product", back_populates="steps")
-    step_definition = relationship("StepDefinition", back_populates="product_steps")
+    step_definition = relationship(
+        "StepDefinition", back_populates="product_steps", lazy="selectin"
+    )
 
     accepted_by = relationship(
         "Employee",
@@ -59,4 +61,4 @@ class ProductStep(BaseWithId):
     )
 
     def __repr__(self):
-        return f"Этап:{self.step_definition_id}, статус={self.status}"
+        return f"{self.step_definition} - {self.status.label}"

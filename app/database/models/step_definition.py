@@ -11,9 +11,22 @@ class StepDefinition(BaseWithId):
     template_id = Column(ForeignKey("step_templates.id"), nullable=False)
     order = Column(Integer, nullable=False)
 
-    template = relationship("StepTemplate", back_populates="definitions")
-    product_steps = relationship("ProductStep", back_populates="step_definition")
-    work_process = relationship("Process", back_populates="steps")
+    template = relationship(
+        "StepTemplate",
+        back_populates="definitions",
+        lazy="selectin",
+    )
+
+    product_steps = relationship(
+        "ProductStep",
+        back_populates="step_definition",
+        lazy="selectin",
+    )
+    work_process = relationship(
+        "Process",
+        back_populates="steps",
+        lazy="selectin",
+    )
 
     steps = relationship(
         "DailyPlanStep",
@@ -23,4 +36,4 @@ class StepDefinition(BaseWithId):
     )
 
     def __repr__(self):
-        return f"{self.order}: id шаблона {self.template_id}"
+        return f"{self.order}: {self.template}"

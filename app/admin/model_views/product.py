@@ -24,7 +24,7 @@ class ProductAdmin(
     column_details_list = (
         "id",
         "serial_number",
-        "process",
+        "work_process",
         "created_at",
         "steps",
     )
@@ -33,7 +33,7 @@ class ProductAdmin(
 
     column_labels = {
         "serial_number": "Номер",
-        "process": "Техпроцесс",
+        "work_process": "Техпроцесс",
         "created_at": "Запуск в производство",
         "steps": "Этапы",
     }
@@ -47,30 +47,10 @@ class ProductAdmin(
     can_delete = True
     can_export = False
 
-    def format_steps(self, _):
-        return [
-            f"{getattr(sd := s.step_definition, 'order', None)}: "
-            f"{getattr(getattr(sd, 'template', None), 'name', '-')}"
-            f" - {getattr(s.status, 'label', s.status)}"
-            for s in getattr(self, "steps", []) or []
-        ]
-
     column_formatters_detail = {
-        "steps": format_steps,
         "created_at": format_datetime,
     }
 
     column_formatters = {
         "created_at": format_datetime,
     }
-
-    async def get_object_for_details(self, value: Any) -> Any:
-        pk = value.get("path_params", {}).get("pk") or value.query_params.get("pks")
-        stmt = self._stmt_by_identifier(pk)
-
-        stmt = stmt.options(
-            selectinload(Product.steps)
-            .selectinload(ProductStep.step_definition)
-            .selectinload(StepDefinition.template)
-        )
-        return await self._get_object_by_pk(stmt)

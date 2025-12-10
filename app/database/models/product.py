@@ -23,6 +23,7 @@ class Product(BaseWithId):
         back_populates="product",
         cascade="all, delete-orphan",
         order_by="ProductStep.id",
+        lazy="selectin",
     )
 
     def __repr__(self):

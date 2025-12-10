@@ -1,9 +1,7 @@
-from sqlalchemy.orm import selectinload
-
 from app.admin.custom_model_view import CustomModelView
-from app.database import DailyPlan, StepDefinition
+from app.admin.filters.daily_plan import EmployeeFilter
+from app.database import DailyPlan
 from app.database.crud.daily_plans import DailyPlanRepository
-from app.database.models import DailyPlanStep
 
 
 class DailyPlanAdmin(
@@ -50,27 +48,4 @@ class DailyPlanAdmin(
     can_export = False
     can_create = True
 
-    def format_steps(self, _):
-        return [
-            f"{getattr(sd := s.step_definition, 'template', None)}: "
-            f"{getattr(getattr(sd, 'work_process', None), 'name', '-')}"
-            for s in getattr(self, "steps", []) or []
-        ]
-
-    column_formatters_detail = {
-        "steps": format_steps,
-    }
-
-    async def get_object_for_details(self, request):
-        pk = request.path_params.get("pk") or request.query_params.get("pks")
-        stmt = self._stmt_by_identifier(pk)
-        stmt = stmt.options(
-            selectinload(DailyPlan.steps)
-            .selectinload(DailyPlanStep.step_definition)
-            .selectinload(StepDefinition.template),
-            selectinload(DailyPlan.steps)
-            .selectinload(DailyPlanStep.step_definition)
-            .selectinload(StepDefinition.work_process),
-        )
-
-        return await self._get_object_by_pk(stmt)
+    column_filters = [EmployeeFilter()]
