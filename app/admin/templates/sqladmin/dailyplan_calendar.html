@@ -1,6 +1,6 @@
 {% extends "sqladmin/layout.html" %}
 {% block content %}
-  {# Ваши flash-сообщения #}
+  {# flash-сообщения #}
   {% if request.cookies.get("flash") %}
   <div class="alert alert-success alert-dismissible fade show" role="alert">
       {{ request.cookies.flash }}
@@ -25,7 +25,7 @@
             <div class="card mb-3">
               <div class="card-body">
                 <div class="row">
-                  <div class="col-md-8">
+                  <div class="col-12">
                     <div class="d-flex justify-content-between align-items-center mb-3">
                       <button class="btn btn-outline-secondary btn-sm" id="cal-prev">&lt;</button>
                       <h4 class="mb-0" id="cal-current-month"></h4>
@@ -57,33 +57,13 @@
                       <small class="text-muted ms-2">Нажмите на дату для фильтрации планов</small>
                     </div>
                   </div>
-
-                  <div class="col-md-4">
-                    <h5>Планы на <span id="cal-selected-date">
-                      {% if request.query_params.get('date') %}
-                        {{ request.query_params.get('date') }}
-                      {% else %}
-                        все дни
-                      {% endif %}
-                    </span></h5>
-                    <div class="small text-muted mb-2" id="cal-plans-count">
-                      Всего записей: <span id="total-count">{{ pagination.count }}</span>
-                    </div>
-                    <div style="max-height: 200px; overflow-y: auto;">
-                      <ul class="list-group list-group-flush small" id="cal-day-preview">
-                        <li class="list-group-item py-1 px-2 text-muted">
-                          Выберите дату для просмотра планов
-                        </li>
-                      </ul>
-                    </div>
-                  </div>
                 </div>
               </div>
             </div>
             {# ==== /КАЛЕНДАРЬ ==== #}
 
             <div class="card">
-              <div class="card-header">
+              <div class="card-header d-flex">
                 <h3 class="card-title">{{ model_view.name_plural }}</h3>
                 <div class="ms-auto">
                   {% if model_view.can_export %}
@@ -95,9 +75,12 @@
                     </a>
                     <ul class="dropdown-menu" aria-labelledby="dropdownMenuButton1">
                       {% for export_type in model_view.export_types %}
-                      <li><a class="dropdown-item"
-                            href="{{ url_for('admin:export', identity=model_view.identity, export_type=export_type) }}">{{
-                            export_type | upper }}</a></li>
+                      <li>
+                        <a class="dropdown-item"
+                           href="{{ url_for('admin:export', identity=model_view.identity, export_type=export_type) }}">
+                          {{ export_type | upper }}
+                        </a>
+                      </li>
                       {% endfor %}
                     </ul>
                   </div>
@@ -157,8 +140,10 @@
                         placeholder="Поля: {{ model_view.search_placeholder() }}"
                         value="{{ request.query_params.get('search', '') }}">
                       <button id="search-button" class="btn" type="button">Поиск</button>
-                      <button id="search-reset" class="btn" type="button" {% if not request.query_params.get('search')
-                        %}disabled{% endif %}><i class="fa-solid fa-times"></i></button>
+                      <button id="search-reset" class="btn" type="button"
+                        {% if not request.query_params.get('search') %}disabled{% endif %}>
+                        <i class="fa-solid fa-times"></i>
+                      </button>
                     </div>
                   </div>
                   {% endif %}
@@ -168,19 +153,23 @@
                 <table class="table card-table table-vcenter text-nowrap" id="plans-table">
                   <thead>
                     <tr>
-                      <th class="w-1"><input class="form-check-input m-0 align-middle" type="checkbox" aria-label="Select all"
-                          id="select-all"></th>
+                      <th class="w-1">
+                        <input class="form-check-input m-0 align-middle" type="checkbox" aria-label="Select all"
+                               id="select-all">
+                      </th>
                       <th class="w-1"></th>
                       {% for name in model_view._list_prop_names %}
                       {% set label = model_view._column_labels.get(name, name) %}
                       <th>
                         {% if name in model_view._sort_fields %}
                         {% if request.query_params.get("sortBy") == name and request.query_params.get("sort") == "asc" %}
-                        <a href="{{ request.url.include_query_params(sort='desc') }}"><i class="fa-solid fa-arrow-up"></i> {{
-                          label }}</a>
+                        <a href="{{ request.url.include_query_params(sort='desc') }}">
+                          <i class="fa-solid fa-arrow-up"></i> {{ label }}
+                        </a>
                         {% elif request.query_params.get("sortBy") == name and request.query_params.get("sort") == "desc" %}
-                        <a href="{{ request.url.include_query_params(sort='asc') }}"><i class="fa-solid fa-arrow-down"></i> {{ label
-                          }}</a>
+                        <a href="{{ request.url.include_query_params(sort='asc') }}">
+                          <i class="fa-solid fa-arrow-down"></i> {{ label }}
+                        </a>
                         {% else %}
                         <a href="{{ request.url.include_query_params(sortBy=name, sort='asc') }}">{{ label }}</a>
                         {% endif %}
@@ -196,25 +185,26 @@
                     <tr data-date="{{ row.date }}">
                       <td>
                         <input type="hidden" value="{{ get_object_identifier(row) }}">
-                        <input class="form-check-input m-0 align-middle select-box" type="checkbox" aria-label="Select item">
+                        <input class="form-check-input m-0 align-middle select-box" type="checkbox"
+                               aria-label="Select item">
                       </td>
                       <td class="text-end">
                         {% if model_view.can_view_details %}
-                        <a href="{{ model_view._build_url_for('admin:details', request, row) }}" data-bs-toggle="tooltip"
-                          data-bs-placement="top" title="Просмотр">
+                        <a href="{{ model_view._build_url_for('admin:details', request, row) }}"
+                           data-bs-toggle="tooltip" data-bs-placement="top" title="Просмотр">
                           <span class="me-1"><i class="fa-solid fa-eye"></i></span>
                         </a>
                         {% endif %}
                         {% if model_view.can_edit %}
-                        <a href="{{ model_view._build_url_for('admin:edit', request, row) }}" data-bs-toggle="tooltip"
-                          data-bs-placement="top" title="Изменить">
+                        <a href="{{ model_view._build_url_for('admin:edit', request, row) }}"
+                           data-bs-toggle="tooltip" data-bs-placement="top" title="Изменить">
                           <span class="me-1"><i class="fa-solid fa-pen-to-square"></i></span>
                         </a>
                         {% endif %}
                         {% if model_view.can_delete %}
                         <a href="#" data-name="{{ model_view.name }}" data-pk="{{ get_object_identifier(row) }}"
-                          data-url="{{ model_view._url_for_delete(request, row) }}" data-bs-toggle="modal"
-                          data-bs-target="#modal-delete" title="Удалить">
+                           data-url="{{ model_view._url_for_delete(request, row) }}" data-bs-toggle="modal"
+                           data-bs-target="#modal-delete" title="Удалить">
                           <span class="me-1"><i class="fa-solid fa-trash"></i></span>
                         </a>
                         {% endif %}
@@ -222,14 +212,20 @@
                       {% for name in model_view._list_prop_names %}
                       {% set value, formatted_value = model_view.get_list_value(row, name) %}
                       {% if name in model_view._relation_names %}
-                      {% if is_list( value ) %}
+                      {% if is_list(value) %}
                       <td>
                         {% for elem, formatted_elem in zip(value, formatted_value) %}
-                          <a href="{{ model_view._build_url_for('admin:details', request, elem) }}">{{ formatted_elem }}</a><br/>
+                          <a href="{{ model_view._build_url_for('admin:details', request, elem) }}">
+                            {{ formatted_elem }}
+                          </a><br/>
                         {% endfor %}
                       </td>
                       {% else %}
-                      <td><a href="{{ model_view._url_for_details_with_prop(request, row, name) }}">{{ formatted_value }}</a></td>
+                      <td>
+                        <a href="{{ model_view._url_for_details_with_prop(request, row, name) }}">
+                          {{ formatted_value }}
+                        </a>
+                      </td>
                       {% endif %}
                       {% else %}
                       <td>{{ formatted_value }}</td>
@@ -241,45 +237,52 @@
                 </table>
               </div>
               <div class="card-footer d-flex justify-content-between align-items-center gap-2">
-                <p class="m-0 text-muted">Показано <span id="shown-count">{{ ((pagination.page - 1) * pagination.page_size) + 1 }}</span> -
-                  <span id="shown-to">{{ min(pagination.page * pagination.page_size, pagination.count) }}</span> из <span id="total-count-footer">{{ pagination.count
-                  }}</span> записей
+                <p class="m-0 text-muted">
+                  Показано <span id="shown-count">
+                    {{ ((pagination.page - 1) * pagination.page_size) + 1 }}
+                  </span>
+                  -
+                  <span id="shown-to">{{ min(pagination.page * pagination.page_size, pagination.count) }}</span>
+                  из
+                  <span id="total-count-footer">{{ pagination.count }}</span> записей
                 </p>
                 <ul class="pagination m-0 ms-auto">
                   <li class="page-item {% if not pagination.has_previous %}disabled{% endif %}">
                     {% if pagination.has_previous %}
                     <a class="page-link" href="{{ pagination.previous_page.url }}">
-                      {% else %}
-                      <a class="page-link" href="#">
-                        {% endif %}
-                        <i class="fa-solid fa-chevron-left"></i>
-                        prev
-                      </a>
+                    {% else %}
+                    <a class="page-link" href="#">
+                    {% endif %}
+                      <i class="fa-solid fa-chevron-left"></i>
+                      prev
+                    </a>
                   </li>
                   {% for page_control in pagination.page_controls %}
-                  <li class="page-item {% if page_control.number == pagination.page %}active{% endif %}"><a class="page-link"
-                      href="{{ page_control.url }}">{{ page_control.number }}</a></li>
+                  <li class="page-item {% if page_control.number == pagination.page %}active{% endif %}">
+                    <a class="page-link" href="{{ page_control.url }}">{{ page_control.number }}</a>
+                  </li>
                   {% endfor %}
                   <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
                     {% if pagination.has_next %}
                     <a class="page-link" href="{{ pagination.next_page.url }}">
-                      {% else %}
-                      <a class="page-link" href="#">
-                        {% endif %}
-                        next
-                        <i class="fa-solid fa-chevron-right"></i>
-                      </a>
+                    {% else %}
+                    <a class="page-link" href="#">
+                    {% endif %}
+                      next
+                      <i class="fa-solid fa-chevron-right"></i>
+                    </a>
                   </li>
                 </ul>
                 <div class="dropdown text-muted">
                   Показать
-                  <a href="#" class="btn btn-sm btn-light dropdown-toggle" data-toggle="dropdown" aria-haspopup="true"
-                    aria-expanded="false">
+                  <a href="#" class="btn btn-sm btn-light dropdown-toggle" data-toggle="dropdown"
+                     aria-haspopup="true" aria-expanded="false">
                     {{ request.query_params.get("pageSize") or model_view.page_size }} / Стр.
                   </a>
                   <div class="dropdown-menu">
                     {% for page_size_option in model_view.page_size_options %}
-                    <a class="dropdown-item" href="{{ request.url.include_query_params(pageSize=page_size_option, page=pagination.resize(page_size_option).page) }}">
+                    <a class="dropdown-item"
+                       href="{{ request.url.include_query_params(pageSize=page_size_option, page=pagination.resize(page_size_option).page) }}">
                       {{ page_size_option }} / Стр.
                     </a>
                     {% endfor %}
@@ -289,7 +292,7 @@
             </div>
           </div>
 
-          {# Sidebar-фильтры — эта часть обязательна чтобы фильтры были! #}
+          {# Sidebar-фильтры справа #}
           {% if model_view.get_filters() %}
           <div class="col-md-3" style="width: 300px; flex-shrink: 0;">
             <div id="filter-sidebar" class="card">
@@ -304,7 +307,8 @@
                       <div class="fw-bold text-truncate">{{ filter.title }}</div>
                       <div>
                         {% for lookup in filter.lookups(request, model_view.model, model_view._run_arbitrary_query) %}
-                        <a href="{{ request.url.include_query_params(**{filter.parameter_name: lookup[0]}) }}" class="d-block text-decoration-none text-truncate">
+                        <a href="{{ request.url.include_query_params(**{filter.parameter_name: lookup[0]}) }}"
+                           class="d-block text-decoration-none text-truncate">
                           {{ lookup[1] }}
                         </a>
                         {% endfor %}
@@ -320,14 +324,16 @@
         </div>
       </div>
     </div>
+
     {% if model_view.can_delete %}
     {% include 'sqladmin/modals/delete.html' %}
     {% endif %}
 
     {% for custom_action in model_view._custom_actions_in_list %}
     {% if custom_action in model_view._custom_actions_confirmation %}
-    {% with confirmation_message = model_view._custom_actions_confirmation[custom_action], custom_action=custom_action,
-    url=model_view._url_for_action(request, custom_action) %}
+    {% with confirmation_message = model_view._custom_actions_confirmation[custom_action],
+            custom_action=custom_action,
+            url=model_view._url_for_action(request, custom_action) %}
     {% include 'sqladmin/modals/list_action_confirmation.html' %}
     {% endwith %}
     {% endif %}
@@ -337,249 +343,169 @@
 {% block tail %}
 {{ super() }}
 <script>
-    (function() {
-      // Функция для форматирования даты в формате YYYY-MM-DD
-      function formatDateLocal(jsDate) {
-        const year = jsDate.getFullYear();
-        const month = String(jsDate.getMonth() + 1).padStart(2, '0');
-        const day = String(jsDate.getDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
-      }
+  (function() {
+    function formatDateLocal(jsDate) {
+      const year = jsDate.getFullYear();
+      const month = String(jsDate.getMonth() + 1).padStart(2, '0');
+      const day = String(jsDate.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
 
-      const tbody = document.querySelector('#dailyplan-calendar tbody');
-      const monthLabel = document.getElementById('cal-current-month');
-      const selectedDateLabel = document.getElementById('cal-selected-date');
-      const plansCountLabel = document.getElementById('cal-plans-count');
-      const plansPreview = document.getElementById('cal-day-preview');
-      const tableBody = document.getElementById('plans-table-body');
-      const shownCountSpan = document.getElementById('shown-count');
-      const shownToSpan = document.getElementById('shown-to');
-      const totalCountSpan = document.getElementById('total-count-footer');
+    const tbody = document.querySelector('#dailyplan-calendar tbody');
+    const monthLabel = document.getElementById('cal-current-month');
+    const tableBody = document.getElementById('plans-table-body');
+    const shownCountSpan = document.getElementById('shown-count');
+    const shownToSpan = document.getElementById('shown-to');
+    const totalCountSpan = document.getElementById('total-count-footer');
 
-      // Собираем информацию о всех планах из таблицы
-      const allPlans = [];
-      const plansByDate = {};
-      const tableRows = tableBody.querySelectorAll('tr');
+    const allPlans = [];
+    const plansByDate = {};
+    const tableRows = tableBody.querySelectorAll('tr');
 
-      tableRows.forEach((row, index) => {
-        // Получаем дату из data-атрибута и нормализуем ее
-        const rawDate = row.getAttribute('data-date');
-        // Преобразуем дату в формат YYYY-MM-DD
-        const dateObj = new Date(rawDate);
-        const normalizedDate = dateObj.toISOString().split('T')[0];
+    tableRows.forEach((row) => {
+      const rawDate = row.getAttribute('data-date');
+      const dateObj = new Date(rawDate);
+      const normalizedDate = dateObj.toISOString().split('T')[0];
 
-        const employeeCell = row.querySelector('td:nth-child(3)'); // Предполагаем, что сотрудник в 3-м столбце
-        const employee = employeeCell ? employeeCell.textContent.trim() : 'Неизвестно';
-        const editLink = row.querySelector('td:nth-child(2) a[title="Изменить"]');
-        const viewLink = row.querySelector('td:nth-child(2) a[title="Просмотр"]');
+      const employeeCell = row.querySelector('td:nth-child(3)');
+      const employee = employeeCell ? employeeCell.textContent.trim() : 'Неизвестно';
+      const editLink = row.querySelector('td:nth-child(2) a[title="Изменить"]');
+      const viewLink = row.querySelector('td:nth-child(2) a[title="Просмотр"]');
 
-        // Сохраняем нормализованную дату
-        row.setAttribute('data-date-normalized', normalizedDate);
+      row.setAttribute('data-date-normalized', normalizedDate);
 
-        allPlans.push({
-          date: normalizedDate,
-          employee: employee,
-          editUrl: editLink ? editLink.href : '#',
-          viewUrl: viewLink ? viewLink.href : '#',
-          rowElement: row
-        });
-
-        if (!plansByDate[normalizedDate]) {
-          plansByDate[normalizedDate] = [];
-        }
-        plansByDate[normalizedDate].push({
-          employee: employee,
-          editUrl: editLink ? editLink.href : '#',
-          viewUrl: viewLink ? viewLink.href : '#'
-        });
+      allPlans.push({
+        date: normalizedDate,
+        employee: employee,
+        editUrl: editLink ? editLink.href : '#',
+        viewUrl: viewLink ? viewLink.href : '#',
+        rowElement: row
       });
 
-      // Получаем выбранную дату из URL
-      const urlParams = new URLSearchParams(window.location.search);
-      const selectedDateFromUrl = urlParams.get('date');
-
-      let current = new Date();
-      // Если есть выбранная дата в URL, устанавливаем календарь на этот месяц
-      if (selectedDateFromUrl) {
-        // selectedDateFromUrl в формате YYYY-MM-DD
-        const [year, month, day] = selectedDateFromUrl.split('-');
-        current = new Date(parseInt(year), parseInt(month) - 1, 1);
-      } else {
-        current.setDate(1);
+      if (!plansByDate[normalizedDate]) {
+        plansByDate[normalizedDate] = [];
       }
+      plansByDate[normalizedDate].push({
+        employee: employee,
+        editUrl: editLink ? editLink.href : '#',
+        viewUrl: viewLink ? viewLink.href : '#'
+      });
+    });
 
-      let selectedDate = selectedDateFromUrl;
+    const urlParams = new URLSearchParams(window.location.search);
+    const selectedDateFromUrl = urlParams.get('date');
 
-      // Функция для фильтрации таблицы
-      function filterTableByDate(dateStr) {
-        selectedDate = dateStr;
-        let visibleCount = 0;
+    let current = new Date();
+    if (selectedDateFromUrl) {
+      const [year, month] = selectedDateFromUrl.split('-');
+      current = new Date(parseInt(year), parseInt(month) - 1, 1);
+    } else {
+      current.setDate(1);
+    }
 
-        tableRows.forEach(row => {
-          const rowDate = row.getAttribute('data-date-normalized'); // Используем нормализованную дату
-          if (!dateStr || rowDate === dateStr) {
-            row.style.display = '';
-            visibleCount++;
-          } else {
-            row.style.display = 'none';
-          }
-        });
+    let selectedDate = selectedDateFromUrl;
 
-        // Обновляем счетчики
-        updateCounters(visibleCount);
+    function filterTableByDate(dateStr) {
+      selectedDate = dateStr;
+      let visibleCount = 0;
 
-        // Обновляем предпросмотр
-        updatePreview(dateStr);
-      }
+      tableRows.forEach(row => {
+        const rowDate = row.getAttribute('data-date-normalized');
+        if (!dateStr || rowDate === dateStr) {
+          row.style.display = '';
+          visibleCount++;
+        } else {
+          row.style.display = 'none';
+        }
+      });
 
-      // Функция обновления счетчиков
-      function updateCounters(visibleCount) {
-        const totalCount = allPlans.length;
+      const totalCount = allPlans.length;
+      if (visibleCount > 0) {
         shownCountSpan.textContent = '1';
         shownToSpan.textContent = visibleCount;
         totalCountSpan.textContent = visibleCount;
-
-        if (selectedDate) {
-          plansCountLabel.innerHTML = `Найдено записей на ${selectedDate}: <strong>${visibleCount}</strong>`;
-        } else {
-          plansCountLabel.innerHTML = `Всего записей: <strong>${totalCount}</strong>`;
-        }
-      }
-
-      // Функция обновления предпросмотра
-      function updatePreview(dateStr) {
-        if (!dateStr) {
-          plansPreview.innerHTML = `
-            <li class="list-group-item py-1 px-2 text-muted">
-              Выберите дату для просмотра планов
-            </li>
-          `;
-          selectedDateLabel.textContent = 'все дни';
-          return;
-        }
-
-        selectedDateLabel.textContent = dateStr;
-
-        const plansForDate = plansByDate[dateStr] || [];
-
-        if (plansForDate.length === 0) {
-          plansPreview.innerHTML = `
-            <li class="list-group-item py-1 px-2 text-muted">
-              Нет планов на эту дату
-            </li>
-          `;
-        } else {
-          let previewHTML = '';
-          const showCount = Math.min(plansForDate.length, 5);
-
-          for (let i = 0; i < showCount; i++) {
-            const plan = plansForDate[i];
-            previewHTML += `
-              <li class="list-group-item py-1 px-2">
-                <a href="${plan.viewUrl}" class="text-decoration-none">
-                  ${plan.employee}
-                </a>
-              </li>
-            `;
-          }
-
-          if (plansForDate.length > 5) {
-            previewHTML += `
-              <li class="list-group-item py-1 px-2 text-muted">
-                ... и еще ${plansForDate.length - 5}
-              </li>
-            `;
-          }
-
-          plansPreview.innerHTML = previewHTML;
-        }
-      }
-
-      function renderCalendar() {
-        tbody.innerHTML = '';
-        const year = current.getFullYear();
-        const month = current.getMonth();
-
-        const monthNames = ['Январь','Февраль','Март','Апрель','Май','Июнь',
-                            'Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
-        monthLabel.textContent = monthNames[month] + ' ' + year;
-
-        const firstDay = (current.getDay() + 6) % 7; // Пн = 0
-        const daysInMonth = new Date(year, month + 1, 0).getDate();
-
-        let day = 1 - firstDay;
-        for (let week = 0; week < 6; week++) {
-          const tr = document.createElement('tr');
-          for (let dow = 0; dow < 7; dow++) {
-            const td = document.createElement('td');
-            if (day < 1 || day > daysInMonth) {
-              td.innerHTML = '&nbsp;';
-            } else {
-              const jsDate = new Date(year, month, day);
-              const dateStr = formatDateLocal(jsDate);
-              td.textContent = day;
-              td.style.cursor = 'pointer';
-
-              // Подсвечиваем дни с планами
-              if (plansByDate[dateStr]) {
-                td.classList.add('table-primary');
-              }
-
-              // Подсвечиваем выбранную дату
-              if (dateStr === selectedDate) {
-                td.classList.add('table-success');
-                td.style.fontWeight = 'bold';
-              }
-
-              td.addEventListener('click', () => {
-                // Фильтруем таблицу по выбранной дате
-                filterTableByDate(dateStr);
-                // Обновляем календарь для подсветки выбранной даты
-                renderCalendar();
-              });
-            }
-            tr.appendChild(td);
-            day++;
-          }
-          tbody.appendChild(tr);
-        }
-      }
-
-      // Кнопки навигации по календарю
-      document.getElementById('cal-prev').addEventListener('click', function() {
-        current.setMonth(current.getMonth() - 1);
-        renderCalendar();
-      });
-
-      document.getElementById('cal-next').addEventListener('click', function() {
-        current.setMonth(current.getMonth() + 1);
-        renderCalendar();
-      });
-
-      // Кнопка "Сегодня"
-      document.getElementById('cal-today').addEventListener('click', function() {
-        const today = formatDateLocal(new Date());
-        current = new Date();
-        current.setDate(1);
-        filterTableByDate(today);
-        renderCalendar();
-      });
-
-      // Кнопка "Показать все"
-      document.getElementById('cal-clear').addEventListener('click', function() {
-        filterTableByDate(null);
-        renderCalendar();
-      });
-
-      // Инициализация
-      if (selectedDateFromUrl) {
-        filterTableByDate(selectedDateFromUrl);
       } else {
-        updateCounters(allPlans.length);
+        shownCountSpan.textContent = '0';
+        shownToSpan.textContent = '0';
+        totalCountSpan.textContent = totalCount;
       }
+    }
 
+    function renderCalendar() {
+      tbody.innerHTML = '';
+      const year = current.getFullYear();
+      const month = current.getMonth();
+
+      const monthNames = ['Январь','Февраль','Март','Апрель','Май','Июнь',
+                          'Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+      monthLabel.textContent = monthNames[month] + ' ' + year;
+
+      const firstDay = (current.getDay() + 6) % 7; // Пн = 0
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+      let day = 1 - firstDay;
+      for (let week = 0; week < 6; week++) {
+        const tr = document.createElement('tr');
+        for (let dow = 0; dow < 7; dow++) {
+          const td = document.createElement('td');
+          if (day < 1 || day > daysInMonth) {
+            td.innerHTML = '&nbsp;';
+          } else {
+            const jsDate = new Date(year, month, day);
+            const dateStr = formatDateLocal(jsDate);
+            td.textContent = day;
+            td.style.cursor = 'pointer';
+
+            if (plansByDate[dateStr]) {
+              td.classList.add('table-primary');
+            }
+
+            if (dateStr === selectedDate) {
+              td.classList.add('table-success');
+              td.style.fontWeight = 'bold';
+            }
+
+            td.addEventListener('click', () => {
+              filterTableByDate(dateStr);
+              renderCalendar();
+            });
+          }
+          tr.appendChild(td);
+          day++;
+        }
+        tbody.appendChild(tr);
+      }
+    }
+
+    document.getElementById('cal-prev').addEventListener('click', function() {
+      current.setMonth(current.getMonth() - 1);
       renderCalendar();
-    })();
+    });
+
+    document.getElementById('cal-next').addEventListener('click', function() {
+      current.setMonth(current.getMonth() + 1);
+      renderCalendar();
+    });
+
+    document.getElementById('cal-today').addEventListener('click', function() {
+      const today = formatDateLocal(new Date());
+      current = new Date();
+      current.setDate(1);
+      filterTableByDate(today);
+      renderCalendar();
+    });
+
+    document.getElementById('cal-clear').addEventListener('click', function() {
+      filterTableByDate(null);
+      renderCalendar();
+    });
+
+    if (selectedDateFromUrl) {
+      filterTableByDate(selectedDateFromUrl);
+    }
+
+    renderCalendar();
+  })();
 </script>
 {% endblock %}
 {% endblock %}
