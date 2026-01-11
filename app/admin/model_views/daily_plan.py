@@ -64,6 +64,27 @@ class DailyPlanQuery(Query):
             await self.model_view.after_model_change(data, obj, False, request)
             return obj
 
+    async def _insert_async(self, data: dict[str, Any], request: Request) -> Any:
+        obj = self.model_view.model()
+
+        async with self.model_view.session_maker(expire_on_commit=False) as session:
+            # 1) сначала даём модельному вью обработать ВСЕ данные (включая steps)
+            #    здесь ты можешь создать связанные DailyPlanStep и т.д.
+            await self.model_view.on_model_change(data, obj, True, request)
+
+            # 2) убираем steps из data для установки простых атрибутов,
+            #    чтобы _set_attributes_async не пытался пихать dict/list в Integer/ForeignKey
+            clean_data = dict(data)
+            clean_data.pop("steps", None)
+
+            obj = await self._set_attributes_async(session, obj, clean_data)
+
+            session.add(obj)
+            await session.commit()
+
+            await self.model_view.after_model_change(data, obj, True, request)
+            return obj
+
 
 class DailyPlanAdmin(
     CustomModelView[DailyPlan],
@@ -77,6 +98,7 @@ class DailyPlanAdmin(
 
     list_template = "sqladmin/daily_plan_calendar.html"
     edit_template = "sqladmin/daily_plan_edit.html"
+    create_template = "sqladmin/daily_plan_edit.html"
 
     form = DailyPlanForm
 
@@ -112,6 +134,9 @@ class DailyPlanAdmin(
     can_create = True
 
     column_filters = [EmployeeFilter()]
+
+    async def insert_model(self, request: Request, data: dict) -> Any:
+        return await DailyPlanQuery(self).insert(data, request)
 
     async def update_model(self, request: Request, pk: str, data: dict) -> Any:
         return await DailyPlanQuery(self).update(pk, data, request)
