@@ -1,0 +1,301 @@
+{% extends "sqladmin/layout.html" %}
+{% from 'sqladmin/_macros.html' import render_form_fields %}
+
+{% block content %}
+<div class="col-12">
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">
+                {{ 'Создание ' if not obj else 'Редактирование ' }}{{ model_view.name }}
+            </h3>
+        </div>
+
+        <div class="card-body border-bottom py-3">
+            <form action="{{ model_view._build_url_for('admin:create' if not obj else 'admin:edit', request, obj) }}"
+                  method="POST"
+                  enctype="multipart/form-data">
+
+                <div class="row">
+                    {% if error %}
+                    <div class="alert alert-danger" role="alert">{{ error }}</div>
+                    {% endif %}
+                </div>
+
+                <fieldset class="form-fieldset mb-4">
+                    <legend>Общие данные</legend>
+                    {{ form.employee_id.label(class="form-label") }}
+                    {{ form.employee_id(class="form-select") }}
+
+                    {{ form.date.label(class="form-label") }}
+                    {{ form.date(class="form-control") }}
+                </fieldset>
+
+                <fieldset class="form-fieldset">
+                    <legend>Процессы / этапы</legend>
+
+                    {# data-prototype для первой / новых строк FieldList #}
+                    <div id="steps-container"
+                         data-prototype='{{ (
+       "<div class=\"card mb-2 step-item\">"
+       "<div class=\"card-body\">"
+       "<div class=\"row\">"
+
+       "<div class=\"col-md-3\">"
+       "<label class=\"form-label\">Процесс</label>"
+       "<select class=\"form-select process-select\" "
+       "name=\"steps-__index__-process_id\" id=\"steps-__index__-process_id\"></select>"
+       "</div>"
+
+       "<div class=\"col-md-4\">"
+       "<label class=\"form-label\">Этап</label>"
+       "<select class=\"form-select step-select\" "
+       "name=\"steps-__index__-step_definition_id\" id=\"steps-__index__-step_definition_id\" disabled>"
+       "</select>"
+       "</div>"
+
+       "<div class=\"col-md-2\">"
+       "<label class=\"form-label\">План, шт.</label>"
+       "<input class=\"form-control\" type=\"number\" "
+       "name=\"steps-__index__-planned_quantity\" id=\"steps-__index__-planned_quantity\" value=\"0\">"
+       "</div>"
+
+       "<div class=\"col-md-2\">"
+       "<label class=\"form-label\">Факт, шт.</label>"
+       "<input class=\"form-control\" type=\"number\" "
+       "name=\"steps-__index__-actual_quantity\" id=\"steps-__index__-actual_quantity\" value=\"0\">"
+       "</div>"
+
+       "<div class=\"col-md-1 d-flex align-items-end\">"
+       "<button type=\"button\" class=\"btn btn-outline-danger btn-remove-step\">✕</button>"
+       "</div>"
+
+       "</div></div></div>"
+     )|tojson|safe }}'>
+
+                        {# уже существующие шаги (при редактировании) #}
+                        {% for subform in form.steps %}
+                        <div class="card mb-2 step-item">
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-3">
+                                        {{ subform.form.process_id.label(class="form-label") }}
+                                        {{ subform.form.process_id(class="form-select process-select") }}
+                                        {% if subform.form.process_id.errors %}
+                                        <div class="text-danger small">
+                                            {{ subform.form.process_id.errors|join(', ') }}
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                    <div class="col-md-4">
+                                        {{ subform.form.step_definition_id.label(class="form-label") }}
+                                        {{ subform.form.step_definition_id(class="form-select step-select") }}
+                                        {% if subform.form.step_definition_id.errors %}
+                                        <div class="text-danger small">
+                                            {{ subform.form.step_definition_id.errors|join(', ') }}
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                    <div class="col-md-2">
+                                        {{ subform.form.planned_quantity.label(class="form-label") }}
+                                        {{ subform.form.planned_quantity(class="form-control") }}
+                                    </div>
+                                    <div class="col-md-2">
+                                        {{ subform.form.actual_quantity.label(class="form-label") }}
+                                        {{ subform.form.actual_quantity(class="form-control") }}
+                                    </div>
+                                    <div class="col-md-1 d-flex align-items-end">
+                                        <button type="button"
+                                                class="btn btn-outline-danger btn-remove-step">
+                                            ✕
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+
+                    <button type="button" class="btn btn-outline-primary" id="btn-add-step">
+                        Добавить этап
+                    </button>
+                </fieldset>
+
+                <div class="row mt-4">
+                    <div class="col-md-2">
+                        <a href="{{ url_for('admin:list', identity=model_view.identity) }}{{ model_view.get_page_for_url(request) }}"
+                           class="btn">
+                            Отмена
+                        </a>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="btn-group flex-wrap" data-toggle="buttons">
+                            <input type="submit" name="save" value="Save" class="btn btn-primary">
+                        </div>
+                    </div>
+                </div>
+
+                {{ form.csrf_token }}
+
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block tail %}
+{{ super() }}
+
+<script>
+    // Добавление / удаление шагов (FieldList) через data-prototype
+    document.addEventListener("DOMContentLoaded", function () {
+      const container = document.getElementById("steps-container");
+      const addBtn = document.getElementById("btn-add-step");
+      if (!container || !addBtn) return;
+
+      let index = container.querySelectorAll(".step-item").length;
+      const prototypeHtml = JSON.parse(container.dataset.prototype);  // строка с __index__
+
+      function createItemFromPrototype() {
+        const html = prototypeHtml.replace(/__index__/g, index++);
+        const wrapper = document.createElement("div");
+        wrapper.innerHTML = html;
+        return wrapper.firstElementChild;
+      }
+
+      addBtn.addEventListener("click", function () {
+        const items = container.querySelectorAll(".step-item");
+
+        if (items.length === 0) {
+          const item = createItemFromPrototype();
+          container.appendChild(item);
+          return;
+        }
+
+        const last = items[items.length - 1];
+        const clone = last.cloneNode(true);
+
+        const anySelect = clone.querySelector("select.process-select");
+        if (!anySelect) return;
+
+        const oldName = anySelect.getAttribute("name");
+        const match = oldName && oldName.match(/^steps-(\d+)-/);
+        const oldIndex = match ? match[1] : null;
+        const newIndex = index++;
+        if (oldIndex === null) return;
+
+        clone.querySelectorAll("input, select").forEach(el => {
+          ["name", "id"].forEach(attr => {
+            const val = el.getAttribute(attr);
+            if (!val) return;
+            el.setAttribute(
+              attr,
+              val.replace(`steps-${oldIndex}-`, `steps-${newIndex}-`)
+            );
+          });
+          if (el.tagName === "SELECT") el.selectedIndex = 0;
+          if (el.type === "number" || el.type === "text") el.value = "";
+        });
+
+        container.appendChild(clone);
+      });
+
+      container.addEventListener("click", function (e) {
+        const btn = e.target.closest(".btn-remove-step");
+        if (!btn) return;
+
+        const item = btn.closest(".step-item");
+        if (item) {
+          item.remove();
+        }
+      });
+    });
+</script>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const data = {{ form.process_steps_map|tojson|safe }};
+  const processes = data.processes || [];
+  const stepsByProcess = data.steps_by_process || {};
+
+  function fillProcessSelect(select, savedValue) {
+    select.innerHTML = "";
+    const empty = document.createElement("option");
+    empty.value = "";
+    empty.textContent = "Выберите процесс";
+    select.appendChild(empty);
+
+    processes.forEach(p => {
+      const opt = document.createElement("option");
+      opt.value = p.id;
+      opt.textContent = p.label;
+      select.appendChild(opt);
+    });
+
+    if (savedValue) {
+      select.value = String(savedValue);
+    }
+  }
+
+  function fillStepSelect(select, processId, savedValue) {
+    select.innerHTML = "";
+    const empty = document.createElement("option");
+    empty.value = "";
+    empty.textContent = "Выберите этап";
+    select.appendChild(empty);
+
+    const steps = stepsByProcess[processId] || [];
+    steps.forEach(s => {
+      const opt = document.createElement("option");
+      opt.value = s.id;
+      opt.textContent = s.label;
+      select.appendChild(opt);
+    });
+
+    select.disabled = steps.length === 0;
+    if (savedValue) {
+      select.value = String(savedValue);
+    }
+  }
+
+  function initRow(row) {
+    const processSelect = row.querySelector(".process-select");
+    const stepSelect = row.querySelector(".step-select");
+    if (!processSelect || !stepSelect) return;
+
+    const savedProcess = processSelect.value;
+    const savedStep = stepSelect.value;
+
+    fillProcessSelect(processSelect, savedProcess || null);
+
+    if (savedProcess) {
+      fillStepSelect(stepSelect, savedProcess, savedStep || null);
+    } else {
+      fillStepSelect(stepSelect, null, null);
+    }
+
+    processSelect.addEventListener("change", function () {
+      const pid = processSelect.value || null;
+      fillStepSelect(stepSelect, pid, null);
+    });
+  }
+
+  const container = document.getElementById("steps-container");
+  if (!container) return;
+
+  // существующие строки
+  container.querySelectorAll(".step-item").forEach(initRow);
+
+  // новые строки
+  const observer = new MutationObserver(mutations => {
+    mutations.forEach(m => {
+      m.addedNodes.forEach(node => {
+        if (node.classList && node.classList.contains("step-item")) {
+          initRow(node);
+        }
+      });
+    });
+  });
+  observer.observe(container, {childList: true});
+});
+</script>
+{% endblock %}
