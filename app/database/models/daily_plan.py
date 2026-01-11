@@ -10,7 +10,6 @@ class DailyPlan(BaseWithId):
     employee_id = Column(Integer, ForeignKey("employees.id"), nullable=False)
     date = Column(Date, nullable=False)
 
-    lazy = ("selectin",)
     employee = relationship(
         "Employee",
         back_populates="plans",
