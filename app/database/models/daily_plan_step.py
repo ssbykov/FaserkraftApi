@@ -18,10 +18,8 @@ class DailyPlanStep(BaseWithId):
         nullable=False,
     )
 
-    # план по этому шагу на день
     planned_quantity = Column(Integer, nullable=False, default=0)
 
-    # фактически сделано по этому шагу за день
     actual_quantity = Column(Integer, nullable=False, default=0)
 
     daily_plan = relationship(
@@ -39,6 +37,14 @@ class DailyPlanStep(BaseWithId):
     @property
     def work_process(self):
         return f"{self.step_definition.work_process}"
+
+    @property
+    def date(self):
+        return f"{self.daily_plan.date}"
+
+    @property
+    def employee_plan(self):
+        return f"{self.daily_plan.employee.name}"
 
     def __repr__(self):
         return f"{self.step_definition} - {self.step_definition.work_process}, план: {self.planned_quantity} шт."
