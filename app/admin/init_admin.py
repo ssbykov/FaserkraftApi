@@ -1,9 +1,10 @@
 import os
-from typing import Any, cast, Sequence, Awaitable
+from typing import Any, cast, Sequence, Awaitable, Iterable
 
 from sqladmin import Admin
 from sqladmin._types import ENGINE_TYPE
 from sqladmin.authentication import login_required, AuthenticationBackend
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import async_sessionmaker
 from sqlalchemy.orm import sessionmaker
@@ -15,7 +16,7 @@ from starlette.requests import Request
 from starlette.responses import Response, RedirectResponse, JSONResponse
 
 from app.core import settings
-from app.database import db_helper
+from app.database import db_helper, Process, StepDefinition, DailyPlan
 from .backend import AdminAuth
 from .custom_model_view import CustomModelView
 from .model_views import (
@@ -31,6 +32,7 @@ from .model_views import (
     DailyPlanAdmin,
     DailyPlanStepAdmin,
 )
+from app.database.crud.employees import get_employee_repo
 
 
 async def init_admin(app: Any) -> "NewAdmin":
@@ -146,6 +148,91 @@ class NewAdmin(Admin):
         context["request"] = request
         return await self.templates.TemplateResponse(request, result.template, context)
 
+    @staticmethod
+    async def _fill_daily_plan_choices(form):
+        async for session in db_helper.get_session():
+            # 1. Сотрудники
+            employee_repo = get_employee_repo(session)
+            employees = await employee_repo.get_all()
+            if hasattr(form, "employee_id"):
+                form.employee_id.choices = [(e.id, str(e)) for e in employees]
+
+            # 2. Процессы
+            processes = (
+                (await session.execute(select(Process).order_by(Process.name)))
+                .scalars()
+                .all()
+            )
+            process_choices = [(p.id, p.name) for p in processes]
+
+            # 3. Этапы
+            steps = (
+                (
+                    await session.execute(
+                        select(StepDefinition)
+                        .join(StepDefinition.work_process)
+                        .order_by(Process.name, StepDefinition.order)
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            step_choices = [(s.id, f"{s.work_process.name} — {s}") for s in steps]
+
+            # 3.1. Плоская форма
+            if hasattr(form, "process_id"):
+                form.process_id.choices = process_choices
+            if hasattr(form, "step_definition_id"):
+                form.step_definition_id.choices = step_choices
+
+            # 3.2. FieldList steps
+            if hasattr(form, "steps") and isinstance(form.steps, Iterable):
+                for subform in form.steps:
+                    if hasattr(subform, "form"):
+                        if hasattr(subform.form, "process_id"):
+                            subform.form.process_id.choices = process_choices
+                        if hasattr(subform.form, "step_definition_id"):
+                            subform.form.step_definition_id.choices = step_choices
+
+            # 4. Данные для JS
+            processes_json = [{"id": p.id, "label": p.name} for p in processes]
+            steps_by_process: dict[int, list[dict]] = {}
+            for s in steps:
+                pid = s.process_id
+                steps_by_process.setdefault(pid, []).append(
+                    {"id": s.id, "label": f"{s.order}: {s.template}"}
+                )
+
+            form.process_steps_map = {
+                "processes": processes_json,
+                "steps_by_process": steps_by_process,
+            }
+
+            break
+
+    @staticmethod
+    def _fill_daily_plan_steps(form, model: DailyPlan) -> None:
+        """Синхронизировать form.steps с model.steps."""
+        form.steps.min_entries = len(model.steps)
+        while len(form.steps) < len(model.steps):
+            form.steps.append_entry()
+
+        for i, step in enumerate(model.steps):
+            subform = form.steps[i].form  # DailyPlanStepForm
+
+            if hasattr(subform, "process_id"):
+                subform.process_id.data = step.step_definition.process_id
+
+            if hasattr(subform, "step_definition_id"):
+                subform.step_definition_id.data = step.step_definition_id
+
+            if hasattr(subform, "planned_quantity"):
+                subform.planned_quantity.data = step.planned_quantity
+
+            if hasattr(subform, "actual_quantity"):
+                subform.actual_quantity.data = step.actual_quantity
+
+    @login_required
     async def edit(self, request: Request) -> Response:
         """Edit model endpoint."""
 
@@ -158,61 +245,79 @@ class NewAdmin(Admin):
             raise HTTPException(status_code=404)
 
         Form = await model_view.scaffold_form(model_view._form_edit_rules)
-        context = {
-            "obj": model,
-            "model_view": model_view,
-            "form": Form(obj=model, data=self._normalize_wtform_data(model)),
-        }
 
+        # --- GET ---
         if request.method == "GET":
+            form = Form(obj=model, data=self._normalize_wtform_data(model))
+
+            if isinstance(model, DailyPlan):
+                await self._fill_daily_plan_choices(form)
+                self._fill_daily_plan_steps(form, model)
+
+            context = {
+                "obj": model,
+                "model_view": model_view,
+                "form": form,
+            }
             return await self.templates.TemplateResponse(
                 request, model_view.edit_template, context
             )
 
+        # --- POST ---
         form_data = await self._handle_form_data(request, model)
-        form = Form(form_data)
+        form = Form(form_data, obj=model)  # WTForms-стиль [web:16][web:18]
+
+        if isinstance(model, DailyPlan):
+            await self._fill_daily_plan_choices(form)
+            # WTForms сам создаст нужное количество entries из formdata [web:12][web:24]
+
         form_data_dict = self._denormalize_wtform_data(form.data, model)
+
+        context = {
+            "obj": model,
+            "model_view": model_view,
+            "form": form,
+        }
 
         if not form.validate():
             context["error"] = "Пожалуйста, исправьте ошибки в форме."
             context["errors"] = form.errors
+            return await self.templates.TemplateResponse(
+                request, model_view.edit_template, context, status_code=400
+            )
 
-        else:
-            try:
+        try:
+            restriction = await model_view.check_restrictions_create(
+                form_data_dict, request
+            )
 
-                restriction = await model_view.check_restrictions_create(
-                    form_data_dict, request
+            if restriction:
+                context["error"] = restriction
+                return await self.templates.TemplateResponse(
+                    request, model_view.edit_template, context, status_code=400
                 )
 
-                if restriction:
-                    context["error"] = restriction
-                else:
-                    pk = request.path_params["pk"]
-                    obj = await model_view.update_model(
-                        request, pk=pk, data=form_data_dict
-                    )
+            pk = request.path_params["pk"]
+            obj = await model_view.update_model(request, pk=pk, data=form_data_dict)
 
-                    url = self.get_save_redirect_url(
-                        request=request,
-                        form=form_data,
-                        obj=obj,
-                        model_view=model_view,
-                    )
-                    response = RedirectResponse(url=url, status_code=302)
+            url = self.get_save_redirect_url(
+                request=request,
+                form=form_data,
+                obj=obj,
+                model_view=model_view,
+            )
+            response = RedirectResponse(url=url, status_code=302)
 
-                    if isinstance(response, RedirectResponse):
-                        if hasattr(model_view, "get_page_for_url"):
-                            if page_suffix := await model_view.get_page_for_url(
-                                request
-                            ):
-                                response.headers["location"] += page_suffix
-                        return response
+            if hasattr(model_view, "get_page_for_url"):
+                if page_suffix := await model_view.get_page_for_url(request):
+                    response.headers["location"] += page_suffix
+            return response
 
-            except Exception as e:
-                context["error"] = str(e)
-        return await self.templates.TemplateResponse(
-            request, model_view.edit_template, context, status_code=400
-        )
+        except Exception as e:
+            context["error"] = str(e)
+            return await self.templates.TemplateResponse(
+                request, model_view.edit_template, context, status_code=400
+            )
 
     def find_custom_model_view(self, identity: str) -> CustomModelView[Any]:
         return cast(CustomModelView[Any], self._find_model_view(identity))
