@@ -32,6 +32,7 @@ from .model_views import (
     DailyPlanAdmin,
     DailyPlanStepAdmin,
 )
+from .save_result import SaveResult
 
 
 async def init_admin(app: Any) -> "NewAdmin":
@@ -243,9 +244,8 @@ class NewAdmin(Admin):
 
     @login_required
     async def edit(self, request: Request) -> Response:
-        """Edit model endpoint."""
-
         await self._edit(request)
+
         identity = request.path_params["identity"]
         model_view = self.find_custom_model_view(identity)
 
@@ -258,79 +258,50 @@ class NewAdmin(Admin):
         # --- GET ---
         if request.method == "GET":
             form = Form(obj=model, data=self._normalize_wtform_data(model))
-
-            page_suffix = ""
             if isinstance(model, DailyPlan):
                 await self._fill_daily_plan_choices(form)
                 self._fill_daily_plan_steps(form, model)
-                if "pk" in request.path_params:
-                    page_suffix = await model_view.get_page_for_url(request)
 
-            context = {
-                "obj": model,
-                "model_view": model_view,
-                "form": form,
-                "page_suffix": page_suffix,
-            }
             return await self.templates.TemplateResponse(
-                request, model_view.edit_template, context
+                request,
+                model_view.edit_template,
+                {
+                    "obj": model,
+                    "model_view": model_view,
+                    "form": form,
+                },
             )
 
         # --- POST ---
         form_data = await self._handle_form_data(request, model)
-        form = Form(form_data, obj=model)  # WTForms-стиль [web:16][web:18]
+        form = Form(form_data, obj=model)
 
         if isinstance(model, DailyPlan):
             await self._fill_daily_plan_choices(form)
-            # WTForms сам создаст нужное количество entries из formdata [web:12][web:24]
-
-        form_data_dict = self._denormalize_wtform_data(form.data, model)
-
-        context = {
-            "obj": model,
-            "model_view": model_view,
-            "form": form,
-        }
 
         if not form.validate():
-            context["error"] = "Пожалуйста, исправьте ошибки в форме."
-            context["errors"] = form.errors
             return await self.templates.TemplateResponse(
-                request, model_view.edit_template, context, status_code=400
+                request,
+                model_view.edit_template,
+                {
+                    "obj": model,
+                    "model_view": model_view,
+                    "form": form,
+                    "error": "Пожалуйста, исправьте ошибки в форме.",
+                    "errors": form.errors,
+                },
+                status_code=400,
             )
 
-        try:
-            restriction = await model_view.check_restrictions_create(
-                form_data_dict, request
-            )
+        data = self._denormalize_wtform_data(form.data, model)
+        pk = request.path_params["pk"]
 
-            if restriction:
-                context["error"] = restriction
-                return await self.templates.TemplateResponse(
-                    request, model_view.edit_template, context, status_code=400
-                )
+        obj = await model_view.update_model(request, pk, data)
 
-            pk = request.path_params["pk"]
-            obj = await model_view.update_model(request, pk=pk, data=form_data_dict)
-
-            url = self.get_save_redirect_url(
-                request=request,
-                form=form_data,
-                obj=obj,
-                model_view=model_view,
-            )
-            response = RedirectResponse(url=url, status_code=302)
-
-            if hasattr(model_view, "get_page_for_url"):
-                if page_suffix := await model_view.get_page_for_url(request):
-                    response.headers["location"] += page_suffix
-            return response
-
-        except Exception as e:
-            context["error"] = str(e)
-            return await self.templates.TemplateResponse(
-                request, model_view.edit_template, context, status_code=400
-            )
+        return RedirectResponse(
+            model_view._build_url_for("admin:details", request, obj),
+            status_code=302,
+        )
 
     def find_custom_model_view(self, identity: str) -> CustomModelView[Any]:
         return cast(CustomModelView[Any], self._find_model_view(identity))
@@ -370,73 +341,60 @@ class NewAdmin(Admin):
         identity = request.path_params["identity"]
         model_view = self.find_custom_model_view(identity)
 
-        context: dict[str, Any] = {
+        Form = await model_view.scaffold_form(model_view._form_create_rules)
+        context = {
             "model_view": model_view,
-            "obj": None,  # важно для шаблона (Создание / action=create)
+            "obj": None,
             "page_suffix": "",
         }
 
-        if isinstance(model_view, BackupDbAdmin):
-            request.session["flash_messages"] = await model_view.create_backup()
-            url = request.url_for("admin:list", identity=identity)
-            return RedirectResponse(url=url, status_code=302)
-
-        Form = await model_view.scaffold_form(model_view._form_create_rules)
-
-        # formdata будет пустым на GET и заполненным на POST [web:16][web:50]
-        form_data = await self._handle_form_data(request)
-        form = Form(form_data)
-        context["form"] = form
-
-        # ---------- GET: первый показ формы ----------
+        # --- GET ---
         if request.method == "GET":
+            form = Form()
             if model_view.model is DailyPlan:
-                # заполняем choices для селектов и создаём хотя бы один шаг
                 await self._fill_daily_plan_choices(form)
-                self._fill_daily_plan_steps(form, model=None)
+            context["form"] = form
             return await self.templates.TemplateResponse(
                 request, model_view.create_template, context
             )
 
-        # ---------- POST: валидация и сохранение ----------
+        # --- POST ---
+        form_data = await self._handle_form_data(request)
+        form = Form(form_data)
+
         if model_view.model is DailyPlan:
-            # на POST тоже нужны choices, иначе селекты и валидация сломаются [web:12][web:21]
             await self._fill_daily_plan_choices(form)
 
         if not form.validate():
-            context["error"] = "Пожалуйста, исправьте ошибки в форме."
-            context["errors"] = form.errors
+            context.update(
+                form=form,
+                error="Пожалуйста, исправьте ошибки в форме.",
+                errors=form.errors,
+            )
             return await self.templates.TemplateResponse(
                 request, model_view.create_template, context, status_code=400
             )
 
-        form_data_dict = self._denormalize_wtform_data(form.data, model_view.model)
+        data = self._denormalize_wtform_data(form.data, model_view.model)
 
-        try:
-            restriction = await model_view.check_restrictions_create(form_data_dict)
-            if restriction:
-                raise ValueError(restriction)
+        result: SaveResult = await model_view.insert_model(request, data)
 
-            obj = await model_view.insert_model(request, form_data_dict)
-
-            url = self.get_save_redirect_url(
-                request=request,
-                form=form_data,
-                obj=obj,
-                model_view=model_view,
+        # Для DailyPlan: если план уже есть — просто сообщение и остаёмся на create
+        if model_view.model is DailyPlan and result.need_confirm:
+            context.update(
+                form=form,
+                error=(
+                    "План на эту дату для выбранного сотрудника уже существует. "
+                    "Создание второго плана невозможно."
+                ),
             )
-            return RedirectResponse(url=url, status_code=302)
-
-        except Exception as e:
-            context["error"] = str(e)
-
-            if "days" in form_data_dict:
-                form_data_dict["days"] = []
-
-            # повторно заполняем форму данными, чтобы не потерять ввод [web:16][web:50]
-            form.process(**form_data_dict)
-            context["form"] = form
 
             return await self.templates.TemplateResponse(
                 request, model_view.create_template, context, status_code=400
             )
+
+        # обычное успешное создание
+        return RedirectResponse(
+            model_view._build_url_for("admin:details", request, result.obj),
+            status_code=302,
+        )
