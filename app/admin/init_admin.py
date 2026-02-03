@@ -296,7 +296,26 @@ class NewAdmin(Admin):
         data = self._denormalize_wtform_data(form.data, model)
         pk = request.path_params["pk"]
 
-        obj = await model_view.update_model(request, pk, data)
+        result: SaveResult = await model_view.update_model(request, pk, data)
+
+        # DailyPlan: конфликт при изменении (другой план с такой же датой/сотрудником)
+        if isinstance(model, DailyPlan) and result.need_confirm:
+            return await self.templates.TemplateResponse(
+                request,
+                model_view.edit_template,
+                {
+                    "obj": model,
+                    "model_view": model_view,
+                    "form": form,
+                    "error": (
+                        "План на эту дату для выбранного сотрудника уже существует. "
+                        "Сохранить изменения невозможно."
+                    ),
+                },
+                status_code=400,
+            )
+
+        obj = result.obj
 
         return RedirectResponse(
             model_view._build_url_for("admin:details", request, obj),

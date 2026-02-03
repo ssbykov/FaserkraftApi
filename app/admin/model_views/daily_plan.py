@@ -1,9 +1,8 @@
 from typing import Any
 
+from fastapi import HTTPException
 from sqladmin._queries import Query
 from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from starlette.requests import Request
 from wtforms import (
@@ -55,7 +54,7 @@ class DailyPlanQuery(Query):
         pk: Any | None = None,
     ) -> SaveResult:
         async with self.model_view.session_maker(expire_on_commit=False) as session:
-            # --- UPDATE (обычное редактирование по pk) ---
+            # --- UPDATE (редактирование по pk) ---
             if pk is not None:
                 stmt = self.model_view._stmt_by_identifier(pk)
 
@@ -64,6 +63,24 @@ class DailyPlanQuery(Query):
 
                 res = await session.execute(stmt)
                 obj = res.scalars().first()
+                if not obj:
+                    raise HTTPException(status_code=404)
+
+                # проверка на конфликт по employee_id + date
+                employee_id = data.get("employee_id")
+                plan_date = data.get("date")
+
+                if employee_id and plan_date:
+                    conflict_stmt = select(DailyPlan).where(
+                        DailyPlan.employee_id == employee_id,
+                        DailyPlan.date == plan_date,
+                        DailyPlan.id != obj.id,  # не считаем сам объект
+                    )
+                    conflict_res = await session.execute(conflict_stmt)
+                    conflict = conflict_res.scalars().first()
+                    if conflict:
+                        # просто возвращаем сигнал need_confirm
+                        return SaveResult(obj=conflict, need_confirm=True)
 
                 await self.model_view.on_model_change(data, obj, False, request)
                 await session.commit()
@@ -84,11 +101,9 @@ class DailyPlanQuery(Query):
                 res = await session.execute(stmt)
                 existing = res.scalars().first()
 
-            # если уже есть план — просто сигнализируем, что сохранить нельзя
             if existing:
                 return SaveResult(obj=existing, need_confirm=True)
 
-            # обычное создание
             obj = DailyPlan()
             await self.model_view.on_model_change(data, obj, True, request)
             session.add(obj)
@@ -150,9 +165,8 @@ class DailyPlanAdmin(
     async def insert_model(self, request: Request, data: dict) -> SaveResult:
         return await DailyPlanQuery(self).save(request, data, pk=None)
 
-    async def update_model(self, request: Request, pk: str, data: dict) -> DailyPlan:
-        result = await DailyPlanQuery(self).save(request, data, pk=pk)
-        return result.obj
+    async def update_model(self, request: Request, pk: str, data: dict) -> SaveResult:
+        return await DailyPlanQuery(self).save(request, data, pk=pk)
 
     async def on_model_change(self, data, model, is_created, request):
         model.employee_id = data["employee_id"]
