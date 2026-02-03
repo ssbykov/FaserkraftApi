@@ -13,10 +13,10 @@
         <div class="card-body border-bottom py-3">
             <form
                     action="{% if not obj %}
-                         {{ url_for('admin:create', identity=model_view.identity) }}
-                       {% else %}
-                         {{ model_view._build_url_for('admin:edit', request, obj) }}
-                       {% endif %}"
+                           {{ url_for('admin:create', identity=model_view.identity) }}
+                         {% else %}
+                           {{ model_view._build_url_for('admin:edit', request, obj) }}
+                         {% endif %}"
                     method="POST"
                     enctype="multipart/form-data">
 
@@ -131,12 +131,12 @@
                         </a>
                     </div>
                     <div class="col-md-6">
-                        <div class="btn-group flex-wrap" data-toggle="buttons">
-                            <input type="submit" name="save" value="Save" class="btn btn-primary">
-                        </div>
+                        <button type="submit" name="save" value="save" class="btn btn-primary">
+                            Save
+                        </button>
                     </div>
                 </div>
-
+                {{ form.confirm_overwrite }}
                 {{ form.csrf_token }}
 
             </form>
