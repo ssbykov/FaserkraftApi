@@ -16,7 +16,7 @@ class SqlAdmin(BaseModel):
 
 class LoggerConfig(BaseModel):
     filename: str = "app.log"
-    log_level: str = "ERROR"
+    log_level: str = os.getenv("LOG_LEVEL", "ERROR").upper()
 
 
 class RunConfig(BaseModel):
@@ -120,7 +120,6 @@ class Settings(BaseSettings):
 ENV_MAP = {
     "dev": ROOT.parent / ".env_dev",
     "prod": ROOT.parent / ".env",
-    "staging": ROOT.parent / ".env_staging",
 }
 
 

@@ -16,5 +16,6 @@ def init_logger(log_file: str = settings.logger.filename) -> None:
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         encoding="utf-8",
     )
+    logging.getLogger("sqlalchemy.engine").setLevel(numeric_level)
     logger = logging.getLogger(__name__)
     logger.addHandler(handler)
