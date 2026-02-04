@@ -394,6 +394,7 @@
 
     const urlParams = new URLSearchParams(window.location.search);
     const selectedDateFromUrl = urlParams.get('date');
+    const employeeFilter = urlParams.get('employee_id');
 
     let current = new Date();
     if (selectedDateFromUrl) {
@@ -500,8 +501,16 @@
       renderCalendar();
     });
 
+    const todayStr = formatDateLocal(new Date());
+
     if (selectedDateFromUrl) {
       filterTableByDate(selectedDateFromUrl);
+    } else if (!employeeFilter) {
+      // нет фильтра по сотруднику -> по умолчанию показываем сегодня
+      filterTableByDate(todayStr);
+    } else {
+      // выбран сотрудник -> показываем все планы на странице
+      filterTableByDate(null);
     }
 
     renderCalendar();
