@@ -125,8 +125,8 @@ ENV_MAP = {
 
 @lru_cache
 def get_settings() -> Settings:
-    env = os.getenv("APP_ENV", "dev")
-    env_file = ENV_MAP.get(env, ENV_MAP["dev"])
+    env = os.getenv("APP_ENV", "prod")
+    env_file = ENV_MAP.get(env, ENV_MAP["prod"])
     return Settings(_env_file=env_file)  # type: ignore[call-arg]
 
 
