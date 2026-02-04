@@ -23,7 +23,7 @@ class ProductCreate(ProductBase):
 
 class ProductRead(ProductBase):
     id: int
-    process: ProcessRead
+    work_process: ProcessRead
     created_at: datetime
     steps: Optional[List["ProductStepRead"]]
 
