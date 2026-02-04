@@ -1,3 +1,5 @@
+import os
+from functools import lru_cache
 from pathlib import Path
 
 from pydantic import BaseModel, PostgresDsn
@@ -103,6 +105,7 @@ class Settings(BaseSettings):
         env_nested_delimiter="__",
         env_prefix="APP_CONFIG__",
     )
+
     api: ApiPrefix = ApiPrefix()
     logger: LoggerConfig = LoggerConfig()
     sql_admin: SqlAdmin
@@ -114,5 +117,18 @@ class Settings(BaseSettings):
     run: RunConfig
 
 
-# noinspection PyArgumentList
-settings = Settings()  # type: ignore[call-arg]
+ENV_MAP = {
+    "dev": ROOT.parent / ".env_dev",
+    "prod": ROOT.parent / ".env",
+    "staging": ROOT.parent / ".env_staging",
+}
+
+
+@lru_cache
+def get_settings() -> Settings:
+    env = os.getenv("APP_ENV", "dev")
+    env_file = ENV_MAP.get(env, ENV_MAP["dev"])
+    return Settings(_env_file=env_file)  # type: ignore[call-arg]
+
+
+settings = get_settings()  # type: ignore[call-arg]
