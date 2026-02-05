@@ -296,7 +296,7 @@ class NewAdmin(Admin):
         data = self._denormalize_wtform_data(form.data, model)
         pk = request.path_params["pk"]
 
-        result: SaveResult = await model_view.update_model(request, pk, data)
+        result: Any = await model_view.update_model(request, pk, data)
 
         # DailyPlan: конфликт при изменении (другой план с такой же датой/сотрудником)
         if isinstance(model, DailyPlan) and result.need_confirm:
@@ -315,10 +315,11 @@ class NewAdmin(Admin):
                 status_code=400,
             )
 
-        obj = result.obj
+        if isinstance(model, DailyPlan):
+            result = result.obj
 
         return RedirectResponse(
-            model_view._build_url_for("admin:details", request, obj),
+            model_view._build_url_for("admin:details", request, result),
             status_code=302,
         )
 
@@ -396,7 +397,7 @@ class NewAdmin(Admin):
 
         data = self._denormalize_wtform_data(form.data, model_view.model)
 
-        result: SaveResult = await model_view.insert_model(request, data)
+        result: Any = await model_view.insert_model(request, data)
 
         # Для DailyPlan: если план уже есть — просто сообщение и остаёмся на create
         if model_view.model is DailyPlan and result.need_confirm:
@@ -412,8 +413,11 @@ class NewAdmin(Admin):
                 request, model_view.create_template, context, status_code=400
             )
 
+        if model_view.model is DailyPlan:
+            result = result.obj
+
         # обычное успешное создание
         return RedirectResponse(
-            model_view._build_url_for("admin:details", request, result.obj),
+            model_view._build_url_for("admin:details", request, result),
             status_code=302,
         )
