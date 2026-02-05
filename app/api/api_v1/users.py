@@ -42,7 +42,17 @@ async def register_device(
     user_manager: Annotated[UserManagerHelper, Depends(get_user_manager_helper)],
     request: Request,
 ) -> DeviceResponse:
-    try:
+    user = await user_manager.get_user_by_id(user_id=device_in.user_id)
+
+    # 1. Пользователь должен существовать, быть активным и верифицированным
+    if user is None or not user.is_active or not user.is_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="INACTIVE_OR_UNVERIFIED_USER",
+        )
+
+    # 2. Для обычного пользователя — сброс пароля по токену
+    if not user.is_superuser:
         try:
             await user_manager.reset_password(
                 token=device_in.token,
@@ -50,31 +60,23 @@ async def register_device(
                 request=request,
             )
         except InvalidResetPasswordToken as exc:
-
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="INVALID_RESET_PASSWORD_TOKEN",
                 headers={"WWW-Authenticate": "Bearer"},
             ) from exc
 
-        employee = await register_device_logic(device_in, device_repo, employee_repo)
+    # 3. Регистрация устройства и привязка к сотруднику
+    employee = await register_device_logic(device_in, device_repo, employee_repo)
 
-        return DeviceResponse(
-            user_email=employee.user.email,
-            employee_name=employee.name,
-            device_id=device_in.device_id,
-            model=device_in.model,
-            manufacturer=device_in.manufacturer,
-        )
-    except HTTPException:
-        # уже правильно сформированный ответ — пробрасываем
-        raise
-    except Exception as e:
-        logging.exception("Error in /new-device: %s", e)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal error during device registration",
-        )
+    # 4. Формируем ответ
+    return DeviceResponse(
+        user_email=employee.user.email,
+        employee_name=employee.name,
+        device_id=device_in.device_id,
+        model=device_in.model,
+        manufacturer=device_in.manufacturer,
+    )
 
 
 async def register_device_logic(
