@@ -1,5 +1,7 @@
 {% extends "sqladmin/layout.html" %}
 {% block content %}
+<div id="flash-error-container"></div>
+
 <div class="col-12">
     <div class="card">
         <div class="card-header d-flex align-items-center justify-content-between">
@@ -135,5 +137,54 @@ url=model_view._url_for_action(request, custom_action) + '?pks=' + (get_object_i
 {% endwith %}
 {% endif %}
 {% endfor %}
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const flashErrorEncoded = urlParams.get('flash_error');
+
+    if (flashErrorEncoded) {
+        try {
+            // Декодируем URL-encoded строку
+            const flashError = decodeURIComponent(flashErrorEncoded);
+
+            // Создаем алерт
+            const container = document.getElementById('flash-error-container');
+            container.innerHTML = `
+                <div class="container-fluid">
+                    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                        ${flashError}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                </div>
+            `;
+
+            // Убираем параметр из URL чтобы сообщение не показывалось при обновлении
+            const url = new URL(window.location);
+            url.searchParams.delete('flash_error');
+            window.history.replaceState({}, '', url);
+
+            // Авто-закрытие через 5 секунд
+            setTimeout(() => {
+                const alertDiv = container.querySelector('.alert');
+                if (alertDiv) {
+                    const closeBtn = alertDiv.querySelector('.btn-close');
+                    if (closeBtn) closeBtn.click();
+                }
+            }, 5000);
+
+            // Закрытие при клике на кнопку
+            container.addEventListener('click', function(e) {
+                if (e.target.classList.contains('btn-close')) {
+                    container.innerHTML = '';
+                }
+            });
+
+        } catch (error) {
+            console.error('Error decoding flash error:', error);
+        }
+    }
+});
+</script>
 
 {% endblock %}

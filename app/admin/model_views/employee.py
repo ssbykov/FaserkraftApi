@@ -1,3 +1,6 @@
+import base64
+from urllib.parse import quote
+
 from sqladmin import action
 from starlette.requests import Request
 from starlette.responses import RedirectResponse
@@ -55,7 +58,7 @@ class EmployeeAdmin(
         label="QR-код",
         add_in_detail=True,
         add_in_list=False,
-        confirmation_message=f"Cоздать QR-код для пользователя?",
+        confirmation_message=f"Создать QR-код для пользователя?",
     )
     async def generate_qr(self, request: Request) -> RedirectResponse:
         pks = int(request.query_params["pks"])
@@ -65,6 +68,20 @@ class EmployeeAdmin(
 
             user_manager_helper = UserManagerHelper()
             user = await user_manager_helper.get_user_by_id(user_id=employee.user_id)
+
+            if not user.is_active or not user.is_verified or user.is_superuser:
+                error_msg = "Нельзя сгенерировать QR-код: пользователь должен быть активен, верифицирован и не быть суперпользователем."
+
+                # Просто используем URL encoding
+                encoded_error = quote(error_msg)
+
+                detail_url = str(
+                    request.url_for("admin:details", identity=self.identity, pk=pks)
+                )
+                return RedirectResponse(
+                    f"{detail_url}?flash_error={encoded_error}",
+                    status_code=303,
+                )
             await user_manager_helper.forgot_password(user=user, request=request)
 
         return RedirectResponse(request.url_for("admin:list", identity=self.identity))
