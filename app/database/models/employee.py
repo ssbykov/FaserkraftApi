@@ -9,6 +9,7 @@ from .base import BaseWithId
 
 class Role(str, Enum):
     admin = "admin"
+    master = "master"
     worker = "worker"
 
 
