@@ -1,7 +1,7 @@
 from datetime import date
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 
 from app.api.api_v1.fastapi_users import current_user
 from app.database.crud.daily_plans import DailyPlanRepository, get_daily_plan_repo
@@ -12,25 +12,23 @@ router = APIRouter(prefix="/daily-plans", tags=["daily-plans"])
 
 
 @router.get(
-    "/{employee_id}",
-    response_model=DailyPlanRead,
+    "",
+    response_model=list[DailyPlanRead],
     status_code=status.HTTP_200_OK,
 )
-async def get_daily_plan(
-    employee_id: int,
+async def get_daily_plans(
     plan_date: date,  # ?plan_date=2026-02-07
     repo: Annotated[DailyPlanRepository, Depends(get_daily_plan_repo)],
     user: Annotated[User, Depends(current_user)],
-) -> DailyPlanRead:
+    employee_id: int | None = Query(default=None),
+) -> list[DailyPlanRead]:
     try:
-        daily_plan = await repo.get(employee_id=employee_id, date=plan_date)
-        return DailyPlanRead.model_validate(daily_plan)
+        daily_plans = await repo.get(date=plan_date, employee_id=employee_id)
+        return [DailyPlanRead.model_validate(dp) for dp in daily_plans]
     except HTTPException as exc:
-        # пробрасываем 404 и другие осознанные HTTP-ошибки
         raise exc
     except Exception:
-        # внутренняя ошибка без лишних деталей наружу
         raise HTTPException(
             status_code=500,
-            detail="Произошла внутренняя ошибка при получении плана на день",
+            detail="Произошла внутренняя ошибка при получении планов на день",
         )
