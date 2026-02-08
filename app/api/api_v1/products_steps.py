@@ -14,7 +14,6 @@ from app.database.crud.products_steps import (
 from app.database.models import User
 from app.database.models.product_step import StepStatus
 from app.database.schemas.product import ProductRead
-from app.database.schemas.product_step import ProductStepUpdate
 
 router = APIRouter(
     tags=["Products_Steps"],
@@ -27,15 +26,15 @@ router.include_router(
 
 @router.post("/", response_model=ProductRead, status_code=status.HTTP_201_CREATED)
 async def accept_step(
-    step: ProductStepUpdate,
+    step_id: int,
     repo: Annotated[ProductStepRepository, Depends(get_products_steps_repo)],
     employee_repo: Annotated[EmployeeRepository, Depends(get_employee_repo)],
     product_repo: Annotated[ProductRepository, Depends(get_product_repo)],
     user: Annotated[User, Depends(current_user)],
 ) -> Optional[ProductRead]:
     try:
-        employee_id = await employee_repo.get_employee_id_by_email(step.performed_by)
-        step = await repo.accept_step(step.id, employee_id)
+        employee = await employee_repo.get_by_id(user.id)
+        step = await repo.accept_step(step_id, employee.id)
         if step is None:
             raise HTTPException(status_code=404, detail="Шаг не найден")
 
@@ -49,6 +48,3 @@ async def accept_step(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Произошла внутренняя ошибка {e}")
-    # except Exception as e:
-    #     traceback.print_exc()
-    #     raise

@@ -20,8 +20,3 @@ class ProductStepBase(BaseSchema):
 
 class ProductStepRead(ProductStepBase):
     step_definition: StepDefinitionOut
-
-
-class ProductStepUpdate(BaseSchema):
-    id: int
-    performed_by: str

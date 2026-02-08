@@ -45,10 +45,3 @@ class EmployeeRepository(GetBackNextIdMixin[Employee]):
 
         await self.session.refresh(employee)
         return employee
-
-    async def get_employee_id_by_email(self, email: str) -> int | None:
-        stmt = select(self.model.id).join(self.model.user).where(User.email == email)
-
-        result = await self.session.execute(stmt)
-        employee_id = result.scalar_one_or_none()
-        return employee_id
