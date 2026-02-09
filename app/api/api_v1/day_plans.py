@@ -25,7 +25,7 @@ async def get_daily_plans(
     user: Annotated[User, Depends(current_user)],
 ) -> list[DailyPlanRead]:
     try:
-        employee = await employee_repo.get_by_id(user.id)
+        employee = await employee_repo.get_by_user_id(user.id)
         employee_id = None
         if employee.role not in [Role.admin, Role.master]:
             employee_id = employee.id
