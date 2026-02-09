@@ -62,6 +62,6 @@ class DailyPlanRepository(GetBackNextIdMixin[DailyPlan]):
             )
         )
 
-        stmt = select(exists(step_def_id_subq))
+        stmt = select(exists(subq))
         result = await self.session.execute(stmt)
         return bool(result.scalar())
