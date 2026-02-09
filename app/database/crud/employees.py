@@ -45,3 +45,8 @@ class EmployeeRepository(GetBackNextIdMixin[Employee]):
 
         await self.session.refresh(employee)
         return employee
+
+    async def get_by_user_id(self, user_id: int) -> Employee | None:
+        query = select(self.model).where(self.model.user_id == user_id)
+        result = await self.session.execute(query)
+        return result.scalar_one_or_none()
