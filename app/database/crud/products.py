@@ -25,13 +25,18 @@ class ProductRepository(GetBackNextIdMixin[Product]):
         # получаем product.id, но ещё не коммитим
         await self.session.flush()
 
-        # 2) подтягиваем процесс с шагами (явно)
-        process = await self.session.get(
-            Process,
-            product_in.process_id,
-            options=[selectinload(Process.steps)],
+        # 2) подтягиваем процесс с шагами (используем select)
+        stmt = (
+            select(Process)
+            .where(Process.id == product_in.process_id)
+            .options(selectinload(Process.steps))
         )
+
+        result = await self.session.execute(stmt)
+        process = result.scalar_one_or_none()
+
         if process is None:
+            await self.session.rollback()
             raise ValueError("Процесс с таким process_id не найден")
 
         # 3) создаём шаги продукта
