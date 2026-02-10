@@ -38,30 +38,53 @@ class DailyPlanRepository(GetBackNextIdMixin[DailyPlan]):
         result = await self.session.execute(stmt)
         return result.unique().scalars().all()
 
-    async def check_step_in_daily_plan(
+    async def check_step_def_in_daily_plan(
         self,
         *,
         date: date_type,
         employee_id: int,
-        product_step_id: int,
-    ):
-        # 1. subquery на step_definition_id нужного ProductStep
-        step_def_id_stmt = select(ProductStep.step_definition_id).where(
-            ProductStep.id == product_step_id
-        )
-        step_def_id_subq = step_def_id_stmt.scalar_subquery()
-
-        # 2. EXISTS по DailyPlan + DailyPlanStep с таким же step_definition_id
+        step_def_id: int,
+    ) -> bool:
         subq = (
             select(DailyPlanStep.id)
             .join(DailyPlan, DailyPlanStep.daily_plan_id == DailyPlan.id)
             .where(
                 DailyPlan.employee_id == employee_id,
                 DailyPlan.date == date,
-                DailyPlanStep.step_definition_id == step_def_id_subq,
+                DailyPlanStep.step_definition_id == step_def_id,
             )
         )
 
         stmt = select(exists(subq))
-        result = await self.session.execute(stmt)
-        return bool(result.scalar())
+        return bool(await self.session.scalar(stmt))
+
+    async def check_step_in_daily_plan(
+        self,
+        *,
+        date: date_type,
+        employee_id: int,
+        product_step_id: int,
+    ) -> bool:
+
+        step_def_id = await self.get_step_def(product_step_id=product_step_id)
+
+        if step_def_id is None:
+            return False
+
+        return await self.check_step_def_in_daily_plan(
+            date=date,
+            employee_id=employee_id,
+            step_def_id=step_def_id,
+        )
+
+    async def get_step_def(
+        self,
+        *,
+        product_step_id: int,
+    ) -> int | None:
+
+        step_def_id_stmt = select(ProductStep.step_definition_id).where(
+            ProductStep.id == product_step_id
+        )
+        res = await self.session.execute(step_def_id_stmt)
+        return res.scalar_one_or_none()
