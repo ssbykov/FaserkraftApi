@@ -1,7 +1,9 @@
-from sqlalchemy import Column, Integer, ForeignKey
-from sqlalchemy.orm import relationship
+from sqlalchemy import Column, Integer, ForeignKey, func, select
+from sqlalchemy.orm import relationship, column_property
 
 from .base import BaseWithId
+from .product_step import StepStatus
+from app.database.models import ProductStep, DailyPlan
 
 
 class DailyPlanStep(BaseWithId):
@@ -20,7 +22,17 @@ class DailyPlanStep(BaseWithId):
 
     planned_quantity = Column(Integer, nullable=False, default=0)
 
-    actual_quantity = Column(Integer, nullable=False, default=0)
+    actual_quantity = column_property(
+        select(func.count(ProductStep.id))
+        .where(
+            ProductStep.step_definition_id == step_definition_id,
+            ProductStep.performed_by_id == DailyPlan.employee_id,
+            func.date(ProductStep.performed_at) == DailyPlan.date,
+            ProductStep.status == StepStatus.done,
+        )
+        .correlate_except(ProductStep)
+        .scalar_subquery()
+    )
 
     daily_plan = relationship(
         "DailyPlan",
