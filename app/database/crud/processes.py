@@ -50,3 +50,13 @@ class ProcessRepository(GetBackNextIdMixin[Process]):
 
         await self.session.refresh(new_process)
         return new_process
+
+    async def get_first_step(self, process_id: int) -> StepDefinition | None:
+        stmt = (
+            select(StepDefinition)
+            .where(StepDefinition.process_id == process_id)
+            .order_by(StepDefinition.order.asc())
+            .limit(1)
+        )
+        res = await self.session.execute(stmt)
+        return res.scalars().first()
