@@ -1,3 +1,4 @@
+from datetime import date
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -6,6 +7,9 @@ from starlette import status
 
 from app.api.api_v1.fastapi_users import current_user
 from app.core import settings
+from app.database.crud.daily_plans import DailyPlanRepository, get_daily_plan_repo
+from app.database.crud.employees import EmployeeRepository, get_employee_repo
+from app.database.crud.processes import ProcessRepository, get_process_repo
 from app.database.crud.products import ProductRepository, get_product_repo
 from app.database.models import User
 from app.database.schemas.product import ProductRead, ProductCreate
@@ -23,9 +27,24 @@ router.include_router(
 async def create_product(
     product_in: ProductCreate,
     repo: Annotated[ProductRepository, Depends(get_product_repo)],
+    employee_repo: Annotated[EmployeeRepository, Depends(get_employee_repo)],
+    process_repo: Annotated[ProcessRepository, Depends(get_process_repo)],
+    day_plan_repo: Annotated[DailyPlanRepository, Depends(get_daily_plan_repo)],
     user: Annotated[User, Depends(current_user)],
 ) -> ProductRead:
     try:
+        employee = await employee_repo.get_by_user_id(user.id)
+        first_step = await process_repo.get_first_step(product_in.process_id)
+
+        if not await day_plan_repo.check_step_def_in_daily_plan(
+            date=date.today(),
+            employee_id=employee.id,
+            step_def_id=first_step.id,
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="В планах нет этого этапа"
+            )
+
         product = await repo.create_product(product_in)
         return ProductRead.model_validate(product)
 
