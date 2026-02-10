@@ -24,7 +24,7 @@ router.include_router(
     response_model=List[ProcessRead],
     status_code=status.HTTP_200_OK,
 )
-async def get_product(
+async def get_processes(
     repo: Annotated[ProcessRepository, Depends(get_process_repo)],
     user: Annotated[User, Depends(current_user)],
 ) -> List[ProductRead]:
