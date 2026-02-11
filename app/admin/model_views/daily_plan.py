@@ -31,11 +31,6 @@ class DailyPlanStepForm(Form):
     planned_quantity = IntegerField(
         "План, шт.", validators=[DataRequired(), NumberRange(min=0)]
     )
-    actual_quantity = IntegerField(
-        "Факт, шт.",
-        validators=[Optional(), NumberRange(min=0)],
-        default=0,
-    )
 
 
 class DailyPlanForm(Form):
@@ -203,12 +198,10 @@ class DailyPlanAdmin(
             if not step_def_id:
                 continue
             planned = step_data.get("planned_quantity") or 0
-            actual = step_data.get("actual_quantity") or 0
 
             model.steps.append(
                 DailyPlanStep(
                     step_definition_id=step_def_id,
                     planned_quantity=int(planned),
-                    actual_quantity=int(actual),
                 )
             )

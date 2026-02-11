@@ -63,12 +63,6 @@
        "name=\"steps-__index__-planned_quantity\" id=\"steps-__index__-planned_quantity\" value=\"0\">"
        "</div>"
 
-       "<div class=\"col-md-2\">"
-       "<label class=\"form-label\">Факт, шт.</label>"
-       "<input class=\"form-control\" type=\"number\" "
-       "name=\"steps-__index__-actual_quantity\" id=\"steps-__index__-actual_quantity\" value=\"0\">"
-       "</div>"
-
        "<div class=\"col-md-1 d-flex align-items-end\">"
        "<button type=\"button\" class=\"btn btn-outline-danger btn-remove-step\">✕</button>"
        "</div>"
@@ -101,10 +95,6 @@
                                     <div class="col-md-2">
                                         {{ subform.form.planned_quantity.label(class="form-label") }}
                                         {{ subform.form.planned_quantity(class="form-control") }}
-                                    </div>
-                                    <div class="col-md-2">
-                                        {{ subform.form.actual_quantity.label(class="form-label") }}
-                                        {{ subform.form.actual_quantity(class="form-control") }}
                                     </div>
                                     <div class="col-md-1 d-flex align-items-end">
                                         <button type="button"
