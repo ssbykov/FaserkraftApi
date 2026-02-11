@@ -13,9 +13,9 @@ class StepDefinitionAdmin(
     category = "Раздел процессов"
 
     column_labels = {
-        "process": "Процесс",
-        "template": "Шаблон",
-        "order": "Порядок",
+        StepDefinition.work_process: "Процесс",
+        StepDefinition.template: "Шаблон",
+        StepDefinition.order: "Порядок",
     }
 
     column_list = (
