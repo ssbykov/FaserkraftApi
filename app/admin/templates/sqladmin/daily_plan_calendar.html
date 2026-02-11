@@ -238,7 +238,8 @@
               </div>
               <div class="card-footer d-flex justify-content-between align-items-center gap-2">
                 <p class="m-0 text-muted">
-                  Показано <span id="shown-count">
+                  Показано
+                  <span id="shown-count">
                     {{ ((pagination.page - 1) * pagination.page_size) + 1 }}
                   </span>
                   -
@@ -345,51 +346,23 @@
 <script>
   (function() {
     function formatDateLocal(jsDate) {
-      const year = jsDate.getFullYear();
+      const year = jsDate.getFullYear();              // 2026, а не 126
       const month = String(jsDate.getMonth() + 1).padStart(2, '0');
       const day = String(jsDate.getDate()).padStart(2, '0');
-      return `${year}-${month}-${day}`;
+      return `${year}-${month}-${day}`;               // '2026-02-11'
     }
 
     const tbody = document.querySelector('#dailyplan-calendar tbody');
     const monthLabel = document.getElementById('cal-current-month');
-    const tableBody = document.getElementById('plans-table-body');
-    const shownCountSpan = document.getElementById('shown-count');
-    const shownToSpan = document.getElementById('shown-to');
-    const totalCountSpan = document.getElementById('total-count-footer');
 
-    const allPlans = [];
+    // Собираем даты, по которым есть планы (для подсветки)
     const plansByDate = {};
-    const tableRows = tableBody.querySelectorAll('tr');
-
-    tableRows.forEach((row) => {
+    document.querySelectorAll('#plans-table-body tr').forEach((row) => {
       const rawDate = row.getAttribute('data-date');
+      if (!rawDate) return;
       const dateObj = new Date(rawDate);
       const normalizedDate = dateObj.toISOString().split('T')[0];
-
-      const employeeCell = row.querySelector('td:nth-child(3)');
-      const employee = employeeCell ? employeeCell.textContent.trim() : 'Неизвестно';
-      const editLink = row.querySelector('td:nth-child(2) a[title="Изменить"]');
-      const viewLink = row.querySelector('td:nth-child(2) a[title="Просмотр"]');
-
-      row.setAttribute('data-date-normalized', normalizedDate);
-
-      allPlans.push({
-        date: normalizedDate,
-        employee: employee,
-        editUrl: editLink ? editLink.href : '#',
-        viewUrl: viewLink ? viewLink.href : '#',
-        rowElement: row
-      });
-
-      if (!plansByDate[normalizedDate]) {
-        plansByDate[normalizedDate] = [];
-      }
-      plansByDate[normalizedDate].push({
-        employee: employee,
-        editUrl: editLink ? editLink.href : '#',
-        viewUrl: viewLink ? viewLink.href : '#'
-      });
+      plansByDate[normalizedDate] = true;
     });
 
     const urlParams = new URLSearchParams(window.location.search);
@@ -405,32 +378,6 @@
     }
 
     let selectedDate = selectedDateFromUrl;
-
-    function filterTableByDate(dateStr) {
-      selectedDate = dateStr;
-      let visibleCount = 0;
-
-      tableRows.forEach(row => {
-        const rowDate = row.getAttribute('data-date-normalized');
-        if (!dateStr || rowDate === dateStr) {
-          row.style.display = '';
-          visibleCount++;
-        } else {
-          row.style.display = 'none';
-        }
-      });
-
-      const totalCount = allPlans.length;
-      if (visibleCount > 0) {
-        shownCountSpan.textContent = '1';
-        shownToSpan.textContent = visibleCount;
-        totalCountSpan.textContent = visibleCount;
-      } else {
-        shownCountSpan.textContent = '0';
-        shownToSpan.textContent = '0';
-        totalCountSpan.textContent = totalCount;
-      }
-    }
 
     function renderCalendar() {
       tbody.innerHTML = '';
@@ -467,8 +414,15 @@
             }
 
             td.addEventListener('click', () => {
-              filterTableByDate(dateStr);
-              renderCalendar();
+              const params = new URLSearchParams(window.location.search);
+              if (dateStr) {
+                params.set('date', dateStr);
+              } else {
+                params.delete('date');
+              }
+              // при смене даты возвращаемся на первую страницу
+              params.delete('page');
+              window.location.search = params.toString();
             });
           }
           tr.appendChild(td);
@@ -490,28 +444,18 @@
 
     document.getElementById('cal-today').addEventListener('click', function() {
       const today = formatDateLocal(new Date());
-      current = new Date();
-      current.setDate(1);
-      filterTableByDate(today);
-      renderCalendar();
+      const params = new URLSearchParams(window.location.search);
+      params.set('date', today);
+      params.delete('page');
+      window.location.search = params.toString();
     });
 
     document.getElementById('cal-clear').addEventListener('click', function() {
-      filterTableByDate(null);
-      renderCalendar();
+      const params = new URLSearchParams(window.location.search);
+      params.delete('date');
+      params.delete('page');
+      window.location.search = params.toString();
     });
-
-    const todayStr = formatDateLocal(new Date());
-
-    if (selectedDateFromUrl) {
-      filterTableByDate(selectedDateFromUrl);
-    } else if (!employeeFilter) {
-      // нет фильтра по сотруднику -> по умолчанию показываем сегодня
-      filterTableByDate(todayStr);
-    } else {
-      // выбран сотрудник -> показываем все планы на странице
-      filterTableByDate(null);
-    }
 
     renderCalendar();
   })();

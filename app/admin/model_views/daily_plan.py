@@ -22,6 +22,7 @@ from app.admin.save_result import SaveResult
 from app.database import DailyPlan
 from app.database.crud.daily_plans import DailyPlanRepository
 from app.database.models import DailyPlanStep
+from datetime import datetime, date as date_cls
 
 
 class DailyPlanStepForm(Form):
@@ -161,6 +162,28 @@ class DailyPlanAdmin(
     can_create = True
 
     column_filters = [EmployeeFilter()]
+
+    def list_query(self, request: Request):
+        query = select(DailyPlan)
+
+        # фильтр по сотруднику
+        employee_id = request.query_params.get("employee_id")
+        if employee_id:
+            try:
+                query = query.where(DailyPlan.employee_id == int(employee_id))
+            except ValueError:
+                pass
+
+        # фильтр по дате из query-параметра
+        date_str = request.query_params.get("date")
+        if date_str:
+            try:
+                d: date_cls = datetime.strptime(date_str, "%Y-%m-%d").date()
+                query = query.where(DailyPlan.date == d)
+            except ValueError:
+                pass
+
+        return query
 
     async def insert_model(self, request: Request, data: dict) -> SaveResult:
         return await DailyPlanQuery(self).save(request, data, pk=None)
