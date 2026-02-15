@@ -12,6 +12,7 @@ from app.database.crud.employees import EmployeeRepository, get_employee_repo
 from app.database.crud.processes import ProcessRepository, get_process_repo
 from app.database.crud.products import ProductRepository, get_product_repo
 from app.database.models import User
+from app.database.models.employee import Role
 from app.database.schemas.product import ProductRead, ProductCreate
 
 router = APIRouter(
@@ -108,6 +109,41 @@ async def get_product(
 ) -> ProductRead:
     try:
         product = await repo.get(serial_number=serial_number)
+        return ProductRead.model_validate(product)
+    except HTTPException as exc:
+        # пробрасываем 404 и другие осознанные HTTP-ошибки
+        raise exc
+    except Exception:
+        # внутренняя ошибка без лишних деталей наружу
+        raise HTTPException(
+            status_code=500,
+            detail="Произошла внутренняя ошибка при получении продукта",
+        )
+
+
+@router.post(
+    "/change_product_process",
+    response_model=ProductRead,
+    status_code=status.HTTP_200_OK,
+)
+async def change_product_process(
+    product_id: int,
+    new_process_id: int,
+    repo: Annotated[ProductRepository, Depends(get_product_repo)],
+    employee_repo: Annotated[EmployeeRepository, Depends(get_employee_repo)],
+    user: Annotated[User, Depends(current_user)],
+) -> ProductRead:
+    try:
+        employee = await employee_repo.get_by_user_id(user.id)
+        if employee.role not in [Role.admin, Role.master]:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Данная операция недоступна",
+            )
+
+        product = await repo.change_product_process(
+            product_id=product_id, new_process_id=new_process_id
+        )
         return ProductRead.model_validate(product)
     except HTTPException as exc:
         # пробрасываем 404 и другие осознанные HTTP-ошибки
