@@ -73,7 +73,7 @@ async def register_device(
     return DeviceResponse(
         user_email=employee.user.email,
         employee_name=employee.name,
-        employee_role=employee.role,
+        employee_role=employee.role.name,
         device_id=device_in.device_id,
         model=device_in.model,
         manufacturer=device_in.manufacturer,
