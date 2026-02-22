@@ -1,5 +1,5 @@
 from datetime import date
-from typing import Annotated
+from typing import Annotated, Callable, Awaitable
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.exc import IntegrityError
@@ -7,6 +7,7 @@ from starlette import status
 
 from app.api.api_v1.fastapi_users import current_user
 from app.core import settings
+from app.database import Product
 from app.database.crud.daily_plans import DailyPlanRepository, get_daily_plan_repo
 from app.database.crud.employees import EmployeeRepository, get_employee_repo
 from app.database.crud.processes import ProcessRepository, get_process_repo
@@ -153,4 +154,84 @@ async def change_product_process(
         raise HTTPException(
             status_code=500,
             detail="Произошла внутренняя ошибка при получении продукта",
+        )
+
+@router.post(
+    "/{product_id}/send_to_scrap",
+    response_model=ProductRead,
+    status_code=status.HTTP_200_OK,
+)
+async def send_product_to_scrap(
+    product_id: int,
+    repo: Annotated[ProductRepository, Depends(get_product_repo)],
+    employee_repo: Annotated[EmployeeRepository, Depends(get_employee_repo)],
+    user: Annotated[User, Depends(current_user)],
+) -> ProductRead:
+    return await _change_product_status_route(
+        product_id=product_id,
+        status_change_call=repo.send_to_scrap,
+        employee_repo=employee_repo,
+        user=user,
+    )
+
+
+@router.post(
+    "/{product_id}/send_to_rework",
+    response_model=ProductRead,
+    status_code=status.HTTP_200_OK,
+)
+async def send_product_to_rework(
+    product_id: int,
+    repo: Annotated[ProductRepository, Depends(get_product_repo)],
+    employee_repo: Annotated[EmployeeRepository, Depends(get_employee_repo)],
+    user: Annotated[User, Depends(current_user)],
+) -> ProductRead:
+    return await _change_product_status_route(
+        product_id=product_id,
+        status_change_call=repo.send_to_rework,
+        employee_repo=employee_repo,
+        user=user,
+    )
+
+
+@router.post(
+    "/{product_id}/restore_from_scrap",
+    response_model=ProductRead,
+    status_code=status.HTTP_200_OK,
+)
+async def restore_product_from_scrap(
+    product_id: int,
+    repo: Annotated[ProductRepository, Depends(get_product_repo)],
+    employee_repo: Annotated[EmployeeRepository, Depends(get_employee_repo)],
+    user: Annotated[User, Depends(current_user)],
+) -> ProductRead:
+    return await _change_product_status_route(
+        product_id=product_id,
+        status_change_call=repo.restore,
+        employee_repo=employee_repo,
+        user=user,
+    )
+
+async def _change_product_status_route(
+    product_id: int,
+    status_change_call: Callable[[int], Awaitable[Product]],
+    employee_repo: EmployeeRepository,
+    user: User,
+) -> ProductRead:
+    try:
+        employee = await employee_repo.get_by_user_id(user.id)
+        if employee.role not in [Role.admin, Role.master]:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Данная операция недоступна",
+            )
+
+        product = await status_change_call(product_id)
+        return ProductRead.model_validate(product)
+    except HTTPException as exc:
+        raise exc
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail="Произошла внутренняя ошибка при изменении статуса продукта",
         )

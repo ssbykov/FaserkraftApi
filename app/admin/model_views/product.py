@@ -1,11 +1,7 @@
-from typing import Any
-
-from sqlalchemy.orm import selectinload
-
 from app.admin.custom_model_view import CustomModelView
 from app.admin.filters.process import ProcessNameFilter
 from app.admin.utils import format_datetime
-from app.database import Product, ProductStep, StepDefinition
+from app.database import Product
 from app.database.crud.products import ProductRepository
 
 
@@ -19,7 +15,12 @@ class ProductAdmin(
     category = "Раздел изделий"
     category_icon = "fa-solid fa-battery-three-quarters"
 
-    column_list = ("serial_number", "process", "created_at")
+    column_list = (
+        "serial_number",
+        "work_process",
+        "created_at",
+        "status",
+    )
 
     column_details_list = (
         "id",

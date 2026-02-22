@@ -1,4 +1,4 @@
-from typing import Any, Optional
+from typing import Optional
 
 from fastapi import HTTPException
 from sqlalchemy import select
@@ -6,6 +6,7 @@ from sqlalchemy.orm import joinedload, selectinload
 
 from app.database import Product, ProductStep, SessionDep, StepDefinition, Process
 from app.database.crud.mixines import GetBackNextIdMixin
+from app.database.models.product import ProductStatus
 from app.database.models.product_step import StepStatus
 from app.database.schemas.product import ProductCreate
 
@@ -95,6 +96,25 @@ class ProductRepository(GetBackNextIdMixin[Product]):
             status_code=404,
             detail=f"Продукт с идентификатором {ident} не найден",
         )
+
+    async def _set_status(self, product_id: int, status: ProductStatus) -> Product:
+        product = await self.get(id=product_id)
+
+        if product.status == status:
+            return product
+
+        product.status = status
+        await self.session.flush()
+        return product
+
+    async def send_to_scrap(self, product_id: int) -> Product:
+        return await self._set_status(product_id, ProductStatus.scrap)
+
+    async def send_to_rework(self, product_id: int) -> Product:
+        return await self._set_status(product_id, ProductStatus.rework)
+
+    async def restore(self, product_id: int) -> Product:
+        return await self._set_status(product_id, ProductStatus.normal)
 
     async def change_product_process(
         self,
