@@ -103,6 +103,8 @@ class ProductRepository(GetBackNextIdMixin[Product]):
         if product.status == status:
             return product
 
+        product.status = status
+
         try:
             await self.session.commit()
         except Exception:
