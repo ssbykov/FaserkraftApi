@@ -103,8 +103,13 @@ class ProductRepository(GetBackNextIdMixin[Product]):
         if product.status == status:
             return product
 
-        product.status = status
-        await self.session.flush()
+        try:
+            await self.session.commit()
+        except Exception:
+            await self.session.rollback()
+            raise
+
+        await self.session.refresh(product)
         return product
 
     async def send_to_scrap(self, product_id: int) -> Product:
