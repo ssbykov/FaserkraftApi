@@ -5,6 +5,7 @@ from zoneinfo import ZoneInfo
 from pydantic import Field
 
 from app.database import BaseSchema, Product
+from app.database.models.product import ProductStatus
 from app.database.schemas.process import ProcessRead
 from app.database.schemas.product_step import ProductStepRead
 
@@ -25,6 +26,10 @@ class ProductRead(ProductBase):
     id: int
     work_process: ProcessRead
     created_at: datetime
+    status: ProductStatus
     steps: Optional[List["ProductStepRead"]]
 
-    model_config = {"from_attributes": True}
+    model_config = {
+        "from_attributes": True,
+        "use_enum_values": True,
+    }
