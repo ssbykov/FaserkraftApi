@@ -42,6 +42,7 @@ class ProductAdmin(
     form_rules = [
         "serial_number",
         "created_at",
+        "status",
     ]
 
     can_edit = True
