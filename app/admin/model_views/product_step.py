@@ -21,7 +21,7 @@ class ProductStepAdmin(
     name = "Этап изделия"
     category = "Раздел изделий"
 
-    column_list = ("product", "process", "status", "performed_by")
+    column_list = ("product", "status", "performed_by")
 
     column_labels = {
         "product": "Изделие",
