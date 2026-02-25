@@ -14,6 +14,7 @@ from app.database.crud.products_steps import (
     get_products_steps_repo,
 )
 from app.database.models import User
+from app.database.models.employee import Role
 from app.database.models.product_step import StepStatus
 from app.database.schemas.product import ProductRead
 
@@ -41,10 +42,13 @@ async def accept_step(
         if plan_date is None:
             plan_date = date.today()
 
-        if not await day_plan_repo.check_step_in_daily_plan(
-            date=plan_date,
-            employee_id=employee.id,
-            product_step_id=step_id,
+        if (
+            employee.role != Role.master
+            and not await day_plan_repo.check_step_in_daily_plan(
+                date=plan_date,
+                employee_id=employee.id,
+                product_step_id=step_id,
+            )
         ):
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="В планах нет этого этапа"

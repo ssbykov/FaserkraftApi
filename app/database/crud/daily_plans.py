@@ -1,7 +1,8 @@
 from datetime import date as date_type
+from typing import Sequence
 
 from sqlalchemy import select, exists
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, Mapped
 
 from app.database import DailyPlan, SessionDep, StepDefinition, ProductStep
 from app.database.crud.mixines import GetBackNextIdMixin
@@ -20,7 +21,7 @@ class DailyPlanRepository(GetBackNextIdMixin[DailyPlan]):
         *,
         date: date_type,
         employee_id: int | None = None,
-    ) -> list[DailyPlan]:
+    ) -> Sequence[DailyPlan]:
         stmt = (
             select(self.model)
             .options(
@@ -42,7 +43,7 @@ class DailyPlanRepository(GetBackNextIdMixin[DailyPlan]):
         self,
         *,
         date: date_type,
-        employee_id: int,
+        employee_id: Mapped[int],
         step_def_id: int,
     ) -> bool:
         subq = (
@@ -62,7 +63,7 @@ class DailyPlanRepository(GetBackNextIdMixin[DailyPlan]):
         self,
         *,
         date: date_type,
-        employee_id: int,
+        employee_id: Mapped[int],
         product_step_id: int,
     ) -> bool:
 
