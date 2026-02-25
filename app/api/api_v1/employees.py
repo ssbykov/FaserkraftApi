@@ -5,15 +5,15 @@ from starlette import status
 
 from app.api.api_v1.fastapi_users import current_user
 from app.core import settings
-from app.database import Process
-from app.database.crud.processes import ProcessRepository, get_process_repo
+from app.database import Employee
+from app.database.crud.employees import EmployeeRepository, get_employee_repo
 from app.database.models import User
-from app.database.schemas.process import ProcessRead
-from app.database.schemas.product import ProductRead
+from app.database.models.employee import Role
+from app.database.schemas.employee import EmployeeRead
 
 router = APIRouter(
-    tags=["Processes"],
-    prefix=settings.api.v1.processes,
+    tags=["Employees"],
+    prefix=settings.api.v1.employees,
 )
 router.include_router(
     router,
@@ -22,15 +22,23 @@ router.include_router(
 
 @router.get(
     "/",
-    response_model=List[ProcessRead],
+    response_model=List[EmployeeRead],
     status_code=status.HTTP_200_OK,
 )
-async def get_processes(
-    repo: Annotated[ProcessRepository, Depends(get_process_repo)],
+async def get_employees(
+    repo: Annotated[EmployeeRepository, Depends(get_employee_repo)],
+    employee_repo: Annotated[EmployeeRepository, Depends(get_employee_repo)],
     user: Annotated[User, Depends(current_user)],
-) -> Sequence[Process]:
+) -> Sequence[Employee] | None:
     try:
-        return await repo.get_all()
+        employee = await employee_repo.get_by_user_id(user.id)
+        if employee.role not in [Role.admin, Role.master]:
+            return await repo.get_all()
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Нет прав доступа к этому ресурсу",
+        )
+
     except HTTPException as exc:
         # пробрасываем 404 и другие осознанные HTTP-ошибки
         raise exc
