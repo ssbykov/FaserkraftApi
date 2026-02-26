@@ -40,10 +40,13 @@ async def create_product(
         employee = await employee_repo.get_by_user_id(user.id)
         first_step = await process_repo.get_first_step(product_in.process_id)
 
-        if not await day_plan_repo.check_step_def_in_daily_plan(
-            date=date.today(),
-            employee_id=employee.id,
-            step_def_id=first_step.id,
+        if (
+            employee.role != Role.master
+            and not await day_plan_repo.check_step_def_in_daily_plan(
+                date=date.today(),
+                employee_id=employee.id,
+                step_def_id=first_step.id,
+            )
         ):
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="В планах нет этого этапа"

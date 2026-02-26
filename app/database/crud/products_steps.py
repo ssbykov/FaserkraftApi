@@ -18,7 +18,7 @@ class ProductStepRepository(GetBackNextIdMixin[ProductStep]):
 
     async def accept_step(
         self,
-        step_id: int,
+        step_id: Mapped[int],
         employee_id: Mapped[int],
     ) -> type[ProductStep] | None:
         step = await self.session.get(self.model, step_id)
@@ -57,7 +57,7 @@ class ProductStepRepository(GetBackNextIdMixin[ProductStep]):
 
     async def change_performer_if_done(
         self,
-        step_id: int,
+        step_id: Mapped[int],
         employee_id: int,
     ) -> type[ProductStep] | None:
         step = await self.session.get(self.model, step_id)

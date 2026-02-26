@@ -2,6 +2,7 @@ from datetime import date
 from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Mapped
 from starlette import status
 
 from app.api.api_v1.fastapi_users import current_user
@@ -29,7 +30,7 @@ router.include_router(
 
 @router.post("/", response_model=ProductRead, status_code=status.HTTP_201_CREATED)
 async def accept_step(
-    step_id: int,
+    step_id: Mapped[int],
     repo: Annotated[ProductStepRepository, Depends(get_products_steps_repo)],
     day_plan_repo: Annotated[DailyPlanRepository, Depends(get_daily_plan_repo)],
     employee_repo: Annotated[EmployeeRepository, Depends(get_employee_repo)],
@@ -76,7 +77,7 @@ async def accept_step(
     status_code=status.HTTP_200_OK,
 )
 async def change_step_performer(
-    step_id: int,
+    step_id: Mapped[int],
     new_employee_id: int,
     repo: Annotated[ProductStepRepository, Depends(get_products_steps_repo)],
     day_plan_repo: Annotated[DailyPlanRepository, Depends(get_daily_plan_repo)],
