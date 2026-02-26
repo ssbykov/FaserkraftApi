@@ -30,7 +30,7 @@ router.include_router(
 
 @router.post("/", response_model=ProductRead, status_code=status.HTTP_201_CREATED)
 async def accept_step(
-    step_id: Mapped[int],
+    step_id: int,
     repo: Annotated[ProductStepRepository, Depends(get_products_steps_repo)],
     day_plan_repo: Annotated[DailyPlanRepository, Depends(get_daily_plan_repo)],
     employee_repo: Annotated[EmployeeRepository, Depends(get_employee_repo)],
@@ -77,7 +77,7 @@ async def accept_step(
     status_code=status.HTTP_200_OK,
 )
 async def change_step_performer(
-    step_id: Mapped[int],
+    step_id: int,
     new_employee_id: int,
     repo: Annotated[ProductStepRepository, Depends(get_products_steps_repo)],
     day_plan_repo: Annotated[DailyPlanRepository, Depends(get_daily_plan_repo)],
