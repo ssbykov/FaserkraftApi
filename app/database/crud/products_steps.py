@@ -16,7 +16,11 @@ def get_products_steps_repo(session: SessionDep) -> "ProductStepRepository":
 class ProductStepRepository(GetBackNextIdMixin[ProductStep]):
     model = ProductStep
 
-    async def accept_step(self, step_id: int, employee_id: Mapped[int]):
+    async def accept_step(
+        self,
+        step_id: int,
+        employee_id: Mapped[int],
+    ) -> type[ProductStep] | None:
         step = await self.session.get(self.model, step_id)
         if not step:
             return None
@@ -41,6 +45,29 @@ class ProductStepRepository(GetBackNextIdMixin[ProductStep]):
         step.status = StepStatus.done
         step.performed_by_id = employee_id
         step.performed_at = datetime.now(ZoneInfo("Europe/Moscow"))
+
+        try:
+            await self.session.commit()
+        except Exception:
+            await self.session.rollback()
+            raise
+
+        await self.session.refresh(step)
+        return step
+
+    async def change_performer_if_done(
+        self,
+        step_id: int,
+        employee_id: int,
+    ) -> type[ProductStep] | None:
+        step = await self.session.get(self.model, step_id)
+        if not step:
+            return None
+
+        if step.status != StepStatus.done:
+            raise ValueError("Нельзя сменить исполнителя, этап ещё не закрыт.")
+
+        step.performed_by_id = employee_id
 
         try:
             await self.session.commit()

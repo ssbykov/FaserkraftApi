@@ -68,3 +68,62 @@ async def accept_step(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Произошла внутренняя ошибка {e}")
+
+
+@router.post(
+    "/change_performer",
+    response_model=ProductRead,
+    status_code=status.HTTP_200_OK,
+)
+async def change_step_performer(
+    step_id: int,
+    new_employee_id: int,
+    repo: Annotated[ProductStepRepository, Depends(get_products_steps_repo)],
+    day_plan_repo: Annotated[DailyPlanRepository, Depends(get_daily_plan_repo)],
+    employee_repo: Annotated[EmployeeRepository, Depends(get_employee_repo)],
+    product_repo: Annotated[ProductRepository, Depends(get_product_repo)],
+    user: Annotated[User, Depends(current_user)],
+    plan_date: date | None = None,
+) -> Optional[ProductRead]:
+    try:
+        # кто инициирует смену исполнителя
+        employee = await employee_repo.get_by_user_id(user.id)
+        if plan_date is None:
+            plan_date = date.today()
+
+        # проверка планов — по-прежнему на текущего пользователя
+        if (
+            employee.role != Role.master
+            and not await day_plan_repo.check_step_in_daily_plan(
+                date=plan_date,
+                employee_id=employee.id,
+                product_step_id=step_id,
+            )
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="В планах нет этого этапа",
+            )
+
+        # смена исполнителя (только если этап закрыт)
+        step = await repo.change_performer_if_done(step_id, new_employee_id)
+        if step is None:
+            raise HTTPException(status_code=404, detail="Шаг не найден")
+
+        # тут уже гарантированно done (иначе repo кинет ValueError)
+        product = await product_repo.get(id=step.product_id)
+        return ProductRead.model_validate(product)
+
+    except HTTPException:
+        raise
+    except ValueError as e:
+        # ошибка из репозитория, если статус не done
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Произошла внутренняя ошибка {e}",
+        )
