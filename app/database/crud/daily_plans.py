@@ -44,7 +44,7 @@ class DailyPlanRepository(GetBackNextIdMixin[DailyPlan]):
         *,
         date: date_type,
         employee_id: Mapped[int],
-        step_def_id: int,
+        step_def_id: Mapped[int],
     ) -> bool:
         subq = (
             select(DailyPlanStep.id)
@@ -64,7 +64,7 @@ class DailyPlanRepository(GetBackNextIdMixin[DailyPlan]):
         *,
         date: date_type,
         employee_id: Mapped[int],
-        product_step_id: int,
+        product_step_id: Mapped[int],
     ) -> bool:
 
         step_def_id = await self.get_step_def(product_step_id=product_step_id)
@@ -81,8 +81,8 @@ class DailyPlanRepository(GetBackNextIdMixin[DailyPlan]):
     async def get_step_def(
         self,
         *,
-        product_step_id: int,
-    ) -> int | None:
+        product_step_id: Mapped[int],
+    ) -> Mapped[int] | None:
 
         step_def_id_stmt = select(ProductStep.step_definition_id).where(
             ProductStep.id == product_step_id
