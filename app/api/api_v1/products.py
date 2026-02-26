@@ -1,4 +1,5 @@
 from datetime import date
+from functools import partial
 from typing import Annotated, Callable, Awaitable
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -14,6 +15,7 @@ from app.database.crud.processes import ProcessRepository, get_process_repo
 from app.database.crud.products import ProductRepository, get_product_repo
 from app.database.models import User
 from app.database.models.employee import Role
+from app.database.models.product import ProductStatus
 from app.database.schemas.product import ProductRead, ProductCreate
 
 router = APIRouter(
@@ -156,61 +158,26 @@ async def change_product_process(
             detail="Произошла внутренняя ошибка при получении продукта",
         )
 
+
 @router.post(
-    "/{product_id}/send_to_scrap",
+    "/{product_id}/change_status",
     response_model=ProductRead,
     status_code=status.HTTP_200_OK,
 )
-async def send_product_to_scrap(
+async def change_product_status(
     product_id: int,
+    status: ProductStatus,  # ?status=scrap|rework|normal
     repo: Annotated[ProductRepository, Depends(get_product_repo)],
     employee_repo: Annotated[EmployeeRepository, Depends(get_employee_repo)],
     user: Annotated[User, Depends(current_user)],
 ) -> ProductRead:
     return await _change_product_status_route(
         product_id=product_id,
-        status_change_call=repo.send_to_scrap,
+        status_change_call=partial(repo.set_status, status=status),
         employee_repo=employee_repo,
         user=user,
     )
 
-
-@router.post(
-    "/{product_id}/send_to_rework",
-    response_model=ProductRead,
-    status_code=status.HTTP_200_OK,
-)
-async def send_product_to_rework(
-    product_id: int,
-    repo: Annotated[ProductRepository, Depends(get_product_repo)],
-    employee_repo: Annotated[EmployeeRepository, Depends(get_employee_repo)],
-    user: Annotated[User, Depends(current_user)],
-) -> ProductRead:
-    return await _change_product_status_route(
-        product_id=product_id,
-        status_change_call=repo.send_to_rework,
-        employee_repo=employee_repo,
-        user=user,
-    )
-
-
-@router.post(
-    "/{product_id}/restore_from_scrap",
-    response_model=ProductRead,
-    status_code=status.HTTP_200_OK,
-)
-async def restore_product_from_scrap(
-    product_id: int,
-    repo: Annotated[ProductRepository, Depends(get_product_repo)],
-    employee_repo: Annotated[EmployeeRepository, Depends(get_employee_repo)],
-    user: Annotated[User, Depends(current_user)],
-) -> ProductRead:
-    return await _change_product_status_route(
-        product_id=product_id,
-        status_change_call=repo.restore,
-        employee_repo=employee_repo,
-        user=user,
-    )
 
 async def _change_product_status_route(
     product_id: int,

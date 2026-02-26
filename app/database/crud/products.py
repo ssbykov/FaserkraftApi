@@ -97,7 +97,7 @@ class ProductRepository(GetBackNextIdMixin[Product]):
             detail=f"Продукт с идентификатором {ident} не найден",
         )
 
-    async def _set_status(self, product_id: int, status: ProductStatus) -> Product:
+    async def set_status(self, product_id: int, status: ProductStatus) -> Product:
         product = await self.get(id=product_id)
 
         if product.status == status:
@@ -113,15 +113,6 @@ class ProductRepository(GetBackNextIdMixin[Product]):
 
         await self.session.refresh(product)
         return product
-
-    async def send_to_scrap(self, product_id: int) -> Product:
-        return await self._set_status(product_id, ProductStatus.scrap)
-
-    async def send_to_rework(self, product_id: int) -> Product:
-        return await self._set_status(product_id, ProductStatus.rework)
-
-    async def restore(self, product_id: int) -> Product:
-        return await self._set_status(product_id, ProductStatus.normal)
 
     async def change_product_process(
         self,
