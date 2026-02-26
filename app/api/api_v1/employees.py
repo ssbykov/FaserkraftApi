@@ -32,7 +32,7 @@ async def get_employees(
 ) -> Sequence[Employee] | None:
     try:
         employee = await employee_repo.get_by_user_id(user.id)
-        if employee.role not in [Role.admin, Role.master]:
+        if employee.role in [Role.admin, Role.master]:
             return await repo.get_all()
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
