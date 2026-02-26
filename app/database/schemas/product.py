@@ -16,6 +16,7 @@ class ProductBase(BaseSchema):
 
 class ProductCreate(ProductBase):
     process_id: int
+    status: ProductStatus = ProductStatus.normal
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(ZoneInfo("Europe/Moscow"))
     )
