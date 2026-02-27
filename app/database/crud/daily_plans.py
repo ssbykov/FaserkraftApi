@@ -95,17 +95,13 @@ class DailyPlanRepository(GetBackNextIdMixin[DailyPlan]):
         *,
         date: date_type,
         employee_id: Mapped[int],
-        product_step_id: Mapped[int],
+        step_id: Mapped[int],
         planned_quantity: int = 0,
     ) -> DailyPlanStep:
         """
         Добавляет этап (через product_step_id) в дневной план сотрудника.
         Если этап уже есть — обновляет planned_quantity.
         """
-
-        step_def_id = await self.get_step_def(product_step_id=product_step_id)
-        if step_def_id is None:
-            raise ValueError("Этап не найден!")
 
         # 1. Получаем/создаём DailyPlan для (date, employee_id)
         stmt_plan = select(self.model).where(
@@ -125,7 +121,7 @@ class DailyPlanRepository(GetBackNextIdMixin[DailyPlan]):
         # 2. Пытаемся найти уже существующий DailyPlanStep с этим step_definition
         stmt_step = select(DailyPlanStep).where(
             DailyPlanStep.daily_plan_id == daily_plan.id,
-            DailyPlanStep.step_definition_id == step_def_id,
+            DailyPlanStep.step_definition_id == step_id,
         )
         existing_step = await self.session.scalar(stmt_step)
 
@@ -139,7 +135,7 @@ class DailyPlanRepository(GetBackNextIdMixin[DailyPlan]):
         # 3. Если не нашли — создаём новый
         daily_plan_step = DailyPlanStep(
             daily_plan_id=daily_plan.id,
-            step_definition_id=step_def_id,
+            step_definition_id=step_id,
             planned_quantity=planned_quantity,
         )
         self.session.add(daily_plan_step)

@@ -67,7 +67,7 @@ async def add_step_to_daily_plan(
         await repo.add_step_to_daily_plan(
             date=plan_date,
             employee_id=employee_id,
-            product_step_id=payload.product_step_id,
+            step_id=payload.product_step_id,
             planned_quantity=payload.planned_quantity,
         )
 
