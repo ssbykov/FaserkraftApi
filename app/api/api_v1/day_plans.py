@@ -79,7 +79,6 @@ async def add_step_to_daily_plan(
                 detail="План на указанную дату не найден",
             )
 
-        daily_plans = await repo.get(date=plan_date, employee_id=employee_id)
         return [DailyPlanRead.model_validate(dp) for dp in daily_plans]
 
     except HTTPException as exc:
