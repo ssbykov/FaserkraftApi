@@ -89,3 +89,59 @@ class DailyPlanRepository(GetBackNextIdMixin[DailyPlan]):
         )
         res = await self.session.execute(step_def_id_stmt)
         return res.scalar_one_or_none()
+
+    async def add_step_to_daily_plan(
+        self,
+        *,
+        date: date_type,
+        employee_id: Mapped[int],
+        product_step_id: Mapped[int],
+        planned_quantity: int = 0,
+    ) -> DailyPlanStep:
+        """
+        Добавляет этап (через product_step_id) в дневной план сотрудника.
+        Если этап уже есть — обновляет planned_quantity.
+        """
+
+        step_def_id = await self.get_step_def(product_step_id=product_step_id)
+        if step_def_id is None:
+            raise ValueError("Этап не найден!")
+
+        # 1. Получаем/создаём DailyPlan для (date, employee_id)
+        stmt_plan = select(self.model).where(
+            self.model.date == date,
+            self.model.employee_id == employee_id,
+        )
+        daily_plan = await self.session.scalar(stmt_plan)
+
+        if daily_plan is None:
+            daily_plan = DailyPlan(
+                date=date,
+                employee_id=employee_id,
+            )
+            self.session.add(daily_plan)
+            await self.session.flush()  # чтобы был id [web:39]
+
+        # 2. Пытаемся найти уже существующий DailyPlanStep с этим step_definition
+        stmt_step = select(DailyPlanStep).where(
+            DailyPlanStep.daily_plan_id == daily_plan.id,
+            DailyPlanStep.step_definition_id == step_def_id,
+        )
+        existing_step = await self.session.scalar(stmt_step)
+
+        if existing_step is not None:
+            # обновляем planned_quantity
+            existing_step.planned_quantity = planned_quantity
+            self.session.add(existing_step)
+            await self.session.flush()
+            return existing_step
+
+        # 3. Если не нашли — создаём новый
+        daily_plan_step = DailyPlanStep(
+            daily_plan_id=daily_plan.id,
+            step_definition_id=step_def_id,
+            planned_quantity=planned_quantity,
+        )
+        self.session.add(daily_plan_step)
+        await self.session.flush()
+        return daily_plan_step

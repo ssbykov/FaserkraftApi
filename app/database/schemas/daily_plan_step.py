@@ -1,7 +1,8 @@
-from typing import ClassVar, Type
+from datetime import date as date_type
+
+from sqlalchemy.orm import Mapped
 
 from app.database import BaseSchema
-from app.database.models import DailyPlanStep
 from app.database.schemas.step_definition import StepDefinitionRead
 
 
@@ -12,8 +13,11 @@ class DailyPlanStepBase(BaseSchema):
     actual_quantity: int = 0
 
 
-class DailyPlanStepCreate(DailyPlanStepBase):
-    base_class: ClassVar[Type[DailyPlanStep]] = DailyPlanStep
+class DailyPlanStepCreate(BaseSchema):
+    employee_id: int
+    plan_date: date_type
+    product_step_id: int
+    planned_quantity: int
 
 
 class DailyPlanStepRead(DailyPlanStepBase):
