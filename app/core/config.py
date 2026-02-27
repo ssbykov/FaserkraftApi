@@ -42,6 +42,7 @@ class ApiV1Prefix(BaseModel):
     users: str = "/users"
     products: str = "/products"
     processes: str = "/processes"
+    step_definitions: str = "/step_definitions"
     employees: str = "/employees"
     products_steps: str = "/products_steps"
 

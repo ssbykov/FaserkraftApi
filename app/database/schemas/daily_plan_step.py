@@ -1,10 +1,8 @@
 from typing import ClassVar, Type
 
-from pydantic import computed_field
-
 from app.database import BaseSchema
 from app.database.models import DailyPlanStep
-from app.database.schemas.step_definition import StepDefinitionOut
+from app.database.schemas.step_definition import StepDefinitionRead
 
 
 class DailyPlanStepBase(BaseSchema):
@@ -21,6 +19,6 @@ class DailyPlanStepCreate(DailyPlanStepBase):
 class DailyPlanStepRead(DailyPlanStepBase):
     id: int
     work_process: str
-    step_definition: StepDefinitionOut
+    step_definition: StepDefinitionRead
 
     model_config = {"from_attributes": True}

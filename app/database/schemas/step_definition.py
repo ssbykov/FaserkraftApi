@@ -1,10 +1,11 @@
 from app.database import BaseSchema
-from app.database.schemas.step_template import StepTemplateOut
+from app.database.schemas.step_template import StepTemplateRead
 
 
-class StepDefinitionOut(BaseSchema):
+class StepDefinitionRead(BaseSchema):
     id: int
+    process_id: int
     order: int
-    template: StepTemplateOut
+    template: StepTemplateRead
 
     model_config = {"from_attributes": True}

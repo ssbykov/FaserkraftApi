@@ -4,7 +4,7 @@ from typing import Optional
 from app.database import BaseSchema
 from app.database.models.product_step import StepStatus
 from app.database.schemas.employee import EmployeeRead
-from app.database.schemas.step_definition import StepDefinitionOut
+from app.database.schemas.step_definition import StepDefinitionRead
 
 
 class ProductStepBase(BaseSchema):
@@ -19,4 +19,4 @@ class ProductStepBase(BaseSchema):
 
 
 class ProductStepRead(ProductStepBase):
-    step_definition: StepDefinitionOut
+    step_definition: StepDefinitionRead
