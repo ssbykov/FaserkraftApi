@@ -44,7 +44,7 @@ async def get_daily_plans(
 
 @router.post(
     "/steps",
-    response_model=DailyPlanRead,
+    response_model=list[DailyPlanRead],
     status_code=status.HTTP_200_OK,
 )
 async def add_step_to_daily_plan(
