@@ -88,3 +88,44 @@ async def add_step_to_daily_plan(
             status_code=500,
             detail="Произошла внутренняя ошибка при добавлении этапа в план",
         )
+
+
+@router.delete(
+    "/steps/{daily_plan_step_id}",
+    response_model=list[DailyPlanRead],
+    status_code=status.HTTP_200_OK,
+)
+async def remove_step_from_daily_plan(
+    daily_plan_step_id: int,
+    repo: Annotated[DailyPlanRepository, Depends(get_daily_plan_repo)],
+    employee_repo: Annotated[EmployeeRepository, Depends(get_employee_repo)],
+    user: Annotated[User, Depends(current_user)],
+) -> list[DailyPlanRead]:
+    try:
+        employee = await employee_repo.get_by_user_id(user.id)
+
+        if employee.role not in [Role.admin, Role.master]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Нет прав доступа к этому ресурсу",
+            )
+
+        daily_plans = await repo.remove_step_from_daily_plan(
+            daily_plan_step_id=daily_plan_step_id,
+        )
+
+        if not daily_plans:
+            raise HTTPException(
+                status_code=404,
+                detail="План или этап не найден",
+            )
+
+        return [DailyPlanRead.model_validate(dp) for dp in daily_plans]
+
+    except HTTPException as exc:
+        raise exc
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail="Произошла внутренняя ошибка при удалении этапа из плана",
+        )

@@ -148,3 +148,47 @@ class DailyPlanRepository(GetBackNextIdMixin[DailyPlan]):
         # 4. Возвращаем все планы на эту дату (как get)
         new_daily_plans = await self.get(date=date)
         return new_daily_plans
+
+    async def remove_step_from_daily_plan(
+        self,
+        *,
+        daily_plan_step_id: int,
+    ) -> Sequence[DailyPlan]:
+        """
+        Удаляет этап по id DailyPlanStep.
+        Если этапа нет — ничего не делает.
+        Возвращает планы на соответствующую дату.
+        """
+        try:
+            # 1. Находим DailyPlanStep
+            stmt_step = select(DailyPlanStep).where(
+                DailyPlanStep.id == daily_plan_step_id
+            )
+            daily_plan_step = await self.session.scalar(stmt_step)
+
+            if daily_plan_step is None:
+                # Ничего не нашли — можно вернуть все планы на сегодняшнюю дату
+                # или выбросить ошибку; здесь вернём пустой список / планы не трогаем
+                return []
+
+            # 2. Получаем связанный DailyPlan
+            daily_plan = daily_plan_step.daily_plan
+            date = daily_plan.date
+
+            # 3. Удаляем шаг
+            await self.session.delete(daily_plan_step)
+
+            # (опционально) если хочешь удалять пустой план:
+            # if not daily_plan.steps or len(daily_plan.steps) == 1:
+            #     await self.session.delete(daily_plan)
+
+            await self.session.flush()
+            await self.session.commit()
+
+        except Exception:
+            await self.session.rollback()
+            raise
+
+        # 4. Возвращаем все планы на эту дату
+        new_daily_plans = await self.get(date=date)
+        return new_daily_plans
