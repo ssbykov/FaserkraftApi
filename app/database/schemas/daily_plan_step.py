@@ -16,7 +16,7 @@ class DailyPlanStepBase(BaseSchema):
 class DailyPlanStepCreate(BaseSchema):
     employee_id: int
     plan_date: date_type
-    product_step_id: int
+    step_id: int
     planned_quantity: int
 
 
