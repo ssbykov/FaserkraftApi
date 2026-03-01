@@ -2,6 +2,7 @@ from datetime import date as date_type
 from typing import Sequence
 
 from sqlalchemy import select, exists
+from sqlalchemy.exc import NoResultFound
 from sqlalchemy.orm import joinedload, Mapped
 
 from app.database import DailyPlan, SessionDep, StepDefinition, ProductStep
@@ -146,6 +147,63 @@ class DailyPlanRepository(GetBackNextIdMixin[DailyPlan]):
             raise
 
         # 4. Возвращаем все планы на эту дату (как get)
+        new_daily_plans = await self.get(date=date)
+        return new_daily_plans
+
+    async def update_step_in_daily_plan(
+        self,
+        *,
+        step_id: int,  # id модели DailyPlanStep
+        date: date_type,
+        employee_id: Mapped[int],
+        step_definition_id: Mapped[int],
+        planned_quantity: int,
+    ) -> Sequence[DailyPlan]:
+        """
+        Обновляет существующий DailyPlanStep по его id.
+        При необходимости создаёт/находит DailyPlan для (date, employee_id)
+        и привязывает к нему шаг.
+        Возвращает все планы на указанную дату.
+        """
+        try:
+            # 1. Получаем/создаём DailyPlan для (date, employee_id)
+            stmt_plan = select(self.model).where(
+                self.model.date == date,
+                self.model.employee_id == employee_id,
+            )
+            daily_plan = await self.session.scalar(stmt_plan)
+
+            if daily_plan is None:
+                daily_plan = DailyPlan(
+                    date=date,
+                    employee_id=employee_id,
+                )
+                self.session.add(daily_plan)
+                await self.session.flush()  # нужен id
+
+            # 2. Ищем существующий DailyPlanStep по его id
+            stmt_step = select(DailyPlanStep).where(DailyPlanStep.id == step_id)
+            daily_plan_step = await self.session.scalar(stmt_step)
+
+            if daily_plan_step is None:
+                # тут можно кинуть своё доменное исключение
+                raise NoResultFound(f"DailyPlanStep id={step_id} not found")
+
+            # 3. Обновляем поля шага
+            daily_plan_step.daily_plan_id = daily_plan.id
+            daily_plan_step.step_definition_id = step_definition_id
+            daily_plan_step.planned_quantity = planned_quantity
+
+            self.session.add(daily_plan_step)
+
+            await self.session.flush()
+            await self.session.commit()
+
+        except Exception:
+            await self.session.rollback()
+            raise
+
+        # 4. Возвращаем все планы на эту дату
         new_daily_plans = await self.get(date=date)
         return new_daily_plans
 

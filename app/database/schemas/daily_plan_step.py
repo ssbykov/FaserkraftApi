@@ -20,6 +20,10 @@ class DailyPlanStepCreate(BaseSchema):
     planned_quantity: int
 
 
+class DailyPlanStepUpdate(DailyPlanStepCreate):
+    step_definition_id: int
+
+
 class DailyPlanStepRead(DailyPlanStepBase):
     id: int
     work_process: str
