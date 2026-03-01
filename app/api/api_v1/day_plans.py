@@ -163,12 +163,6 @@ async def remove_step_from_daily_plan(
             daily_plan_step_id=daily_plan_step_id,
         )
 
-        if not daily_plans:
-            raise HTTPException(
-                status_code=404,
-                detail="План или этап не найден",
-            )
-
         return [DailyPlanRead.model_validate(dp) for dp in daily_plans]
 
     except HTTPException as exc:
