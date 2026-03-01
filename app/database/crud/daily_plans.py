@@ -17,6 +17,33 @@ def get_daily_plan_repo(session: SessionDep) -> "DailyPlanRepository":
 class DailyPlanRepository(GetBackNextIdMixin[DailyPlan]):
     model = DailyPlan
 
+    async def _get_or_create_daily_plan(
+        self, date: date_type, employee_id: int
+    ) -> DailyPlan:
+        """Получить или создать DailyPlan для сотрудника на указанную дату."""
+        stmt = select(self.model).where(
+            self.model.date == date,
+            self.model.employee_id == employee_id,
+        )
+        daily_plan = await self.session.scalar(stmt)
+
+        if daily_plan is None:
+            daily_plan = DailyPlan(date=date, employee_id=employee_id)
+            self.session.add(daily_plan)
+            await self.session.flush()
+
+        return daily_plan
+
+    async def _handle_operation(self, operation, date: date_type):
+        """Обертка для выполнения операций с транзакцией."""
+        try:
+            result = await operation()
+            await self.session.commit()
+            return result
+        except Exception:
+            await self.session.rollback()
+            raise
+
     async def get(
         self,
         *,
@@ -44,8 +71,8 @@ class DailyPlanRepository(GetBackNextIdMixin[DailyPlan]):
         self,
         *,
         date: date_type,
-        employee_id: Mapped[int],
-        step_def_id: Mapped[int],
+        employee_id: int,
+        step_def_id: int,
     ) -> bool:
         subq = (
             select(DailyPlanStep.id)
@@ -56,82 +83,46 @@ class DailyPlanRepository(GetBackNextIdMixin[DailyPlan]):
                 DailyPlanStep.step_definition_id == step_def_id,
             )
         )
-
-        stmt = select(exists(subq))
-        return bool(await self.session.scalar(stmt))
+        return bool(await self.session.scalar(select(exists(subq))))
 
     async def check_step_in_daily_plan(
         self,
         *,
         date: date_type,
-        employee_id: Mapped[int],
-        product_step_id: Mapped[int],
+        employee_id: int,
+        product_step_id: int,
     ) -> bool:
-
-        step_def_id = await self.get_step_def(product_step_id=product_step_id)
-
-        if step_def_id is None:
-            return False
-
-        return await self.check_step_def_in_daily_plan(
-            date=date,
-            employee_id=employee_id,
-            step_def_id=step_def_id,
+        step_def_id = await self._get_step_def(product_step_id)
+        return step_def_id is not None and await self.check_step_def_in_daily_plan(
+            date=date, employee_id=employee_id, step_def_id=step_def_id
         )
 
-    async def get_step_def(
-        self,
-        *,
-        product_step_id: Mapped[int],
-    ) -> Mapped[int] | None:
-
-        step_def_id_stmt = select(ProductStep.step_definition_id).where(
+    async def _get_step_def(self, product_step_id: int) -> int | None:
+        stmt = select(ProductStep.step_definition_id).where(
             ProductStep.id == product_step_id
         )
-        res = await self.session.execute(step_def_id_stmt)
-        return res.scalar_one_or_none()
+        return await self.session.scalar(stmt)
 
     async def add_step_to_daily_plan(
         self,
         *,
         date: date_type,
-        employee_id: Mapped[int],
-        step_id: Mapped[int],
+        employee_id: int,
+        step_id: int,
         planned_quantity: int = 0,
     ) -> Sequence[DailyPlan]:
-        """
-        Добавляет этап (через step_id = step_definition_id) в дневной план сотрудника.
-        Если этап уже есть — обновляет planned_quantity.
-        Возвращает планы на указанную дату.
-        """
-        try:
-            # 1. Получаем/создаём DailyPlan для (date, employee_id)
-            stmt_plan = select(self.model).where(
-                self.model.date == date,
-                self.model.employee_id == employee_id,
-            )
-            daily_plan = await self.session.scalar(stmt_plan)
+        async def operation():
+            daily_plan = await self._get_or_create_daily_plan(date, employee_id)
 
-            if daily_plan is None:
-                daily_plan = DailyPlan(
-                    date=date,
-                    employee_id=employee_id,
-                )
-                self.session.add(daily_plan)
-                await self.session.flush()  # чтобы был id
-
-            # 2. Ищем существующий DailyPlanStep
-            stmt_step = select(DailyPlanStep).where(
+            stmt = select(DailyPlanStep).where(
                 DailyPlanStep.daily_plan_id == daily_plan.id,
                 DailyPlanStep.step_definition_id == step_id,
             )
-            existing_step = await self.session.scalar(stmt_step)
+            existing_step = await self.session.scalar(stmt)
 
-            if existing_step is not None:
+            if existing_step:
                 existing_step.planned_quantity = planned_quantity
-                self.session.add(existing_step)
             else:
-                # 3. Если не нашли — создаём новый
                 daily_plan_step = DailyPlanStep(
                     daily_plan_id=daily_plan.id,
                     step_definition_id=step_id,
@@ -139,114 +130,57 @@ class DailyPlanRepository(GetBackNextIdMixin[DailyPlan]):
                 )
                 self.session.add(daily_plan_step)
 
-            await self.session.flush()
-            await self.session.commit()
-
-        except Exception:
-            await self.session.rollback()
-            raise
-
-        # 4. Возвращаем все планы на эту дату (как get)
-        new_daily_plans = await self.get(date=date)
-        return new_daily_plans
+        return await self._handle_operation(operation, date)
 
     async def update_step_in_daily_plan(
         self,
         *,
-        step_id: int,  # id модели DailyPlanStep
+        step_id: int,
         date: date_type,
-        employee_id: Mapped[int],
-        step_definition_id: Mapped[int],
+        employee_id: int,
+        step_definition_id: int,
         planned_quantity: int,
     ) -> Sequence[DailyPlan]:
-        """
-        Обновляет существующий DailyPlanStep по его id.
-        При необходимости создаёт/находит DailyPlan для (date, employee_id)
-        и привязывает к нему шаг.
-        Возвращает все планы на указанную дату.
-        """
-        try:
-            # 1. Получаем/создаём DailyPlan для (date, employee_id)
-            stmt_plan = select(self.model).where(
-                self.model.date == date,
-                self.model.employee_id == employee_id,
-            )
-            daily_plan = await self.session.scalar(stmt_plan)
+        async def operation():
+            daily_plan = await self._get_or_create_daily_plan(date, employee_id)
 
-            if daily_plan is None:
-                daily_plan = DailyPlan(
-                    date=date,
-                    employee_id=employee_id,
-                )
-                self.session.add(daily_plan)
-                await self.session.flush()  # нужен id
+            step_stmt = select(DailyPlanStep).where(DailyPlanStep.id == step_id)
+            current_step = await self.session.scalar(step_stmt)
 
-            # 2. Ищем существующий DailyPlanStep по его id
-            stmt_step = select(DailyPlanStep).where(DailyPlanStep.id == step_id)
-            daily_plan_step = await self.session.scalar(stmt_step)
-
-            if daily_plan_step is None:
-                # тут можно кинуть своё доменное исключение
+            if current_step is None:
                 raise NoResultFound(f"DailyPlanStep id={step_id} not found")
 
-            # 3. Обновляем поля шага
-            daily_plan_step.daily_plan_id = daily_plan.id
-            daily_plan_step.step_definition_id = step_definition_id
-            daily_plan_step.planned_quantity = planned_quantity
+            conflict_stmt = select(DailyPlanStep).where(
+                DailyPlanStep.daily_plan_id == daily_plan.id,
+                DailyPlanStep.step_definition_id == step_definition_id,
+                DailyPlanStep.id != step_id,
+            )
+            conflict_step = await self.session.scalar(conflict_stmt)
 
-            self.session.add(daily_plan_step)
+            if conflict_step:
+                conflict_step.planned_quantity = planned_quantity
+                await self.session.delete(current_step)
+            else:
+                current_step.daily_plan_id = daily_plan.id
+                current_step.step_definition_id = step_definition_id
+                current_step.planned_quantity = planned_quantity
 
-            await self.session.flush()
-            await self.session.commit()
-
-        except Exception:
-            await self.session.rollback()
-            raise
-
-        # 4. Возвращаем все планы на эту дату
-        new_daily_plans = await self.get(date=date)
-        return new_daily_plans
+        return await self._handle_operation(operation, date)
 
     async def remove_step_from_daily_plan(
         self,
         *,
         daily_plan_step_id: int,
     ) -> Sequence[DailyPlan]:
-        """
-        Удаляет этап по id DailyPlanStep.
-        Если этапа нет — ничего не делает.
-        Возвращает планы на соответствующую дату.
-        """
-        try:
-            # 1. Находим DailyPlanStep
-            stmt_step = select(DailyPlanStep).where(
-                DailyPlanStep.id == daily_plan_step_id
-            )
-            daily_plan_step = await self.session.scalar(stmt_step)
+        stmt = select(DailyPlanStep).where(DailyPlanStep.id == daily_plan_step_id)
+        daily_plan_step = await self.session.scalar(stmt)
 
-            if daily_plan_step is None:
-                # Ничего не нашли — можно вернуть все планы на сегодняшнюю дату
-                # или выбросить ошибку; здесь вернём пустой список / планы не трогаем
-                return []
+        if daily_plan_step is None:
+            raise NoResultFound(f"DailyPlanStep id={daily_plan_step_id} not found")
 
-            # 2. Получаем связанный DailyPlan
-            daily_plan = daily_plan_step.daily_plan
-            date = daily_plan.date
+        date = daily_plan_step.daily_plan.date
 
-            # 3. Удаляем шаг
+        async def operation():
             await self.session.delete(daily_plan_step)
 
-            # (опционально) если хочешь удалять пустой план:
-            # if not daily_plan.steps or len(daily_plan.steps) == 1:
-            #     await self.session.delete(daily_plan)
-
-            await self.session.flush()
-            await self.session.commit()
-
-        except Exception:
-            await self.session.rollback()
-            raise
-
-        # 4. Возвращаем все планы на эту дату
-        new_daily_plans = await self.get(date=date)
-        return new_daily_plans
+        return await self._handle_operation(operation, date)
