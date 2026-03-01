@@ -34,15 +34,19 @@ class DailyPlanRepository(GetBackNextIdMixin[DailyPlan]):
 
         return daily_plan
 
-    async def _handle_operation(self, operation, date: date_type):
-        """Обертка для выполнения операций с транзакцией."""
+    async def _handle_operation(
+        self, operation, date: date_type
+    ) -> Sequence[DailyPlan]:
+        """Обертка для выполнения операций с транзакцией + возврат актуальных планов."""
         try:
-            result = await operation()
+            await operation()
             await self.session.commit()
-            return result
         except Exception:
             await self.session.rollback()
             raise
+
+        # всегда возвращаем актуальные планы на дату
+        return await self.get(date=date)
 
     async def get(
         self,
