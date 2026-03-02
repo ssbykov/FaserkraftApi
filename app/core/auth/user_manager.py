@@ -11,7 +11,6 @@ from fastapi_users.schemas import UC
 
 from app.core import settings, config
 from app.database.models import User
-from app.database.schemas.qr_data import QRData
 from app.tasks import run_process_mail
 from app.utils.qr_code_gentrator import generate_qr_code
 

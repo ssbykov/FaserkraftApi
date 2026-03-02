@@ -361,6 +361,12 @@ class NewAdmin(Admin):
         identity = request.path_params["identity"]
         model_view = self.find_custom_model_view(identity)
 
+        # --- спец-обработка BackupDbAdmin ---
+        if isinstance(model_view, BackupDbAdmin):
+            request.session["flash_messages"] = await model_view.create_backup()
+            url = request.url_for("admin:list", identity=identity)
+            return RedirectResponse(url=url, status_code=302)
+
         Form = await model_view.scaffold_form(model_view._form_create_rules)
         context = {
             "model_view": model_view,
