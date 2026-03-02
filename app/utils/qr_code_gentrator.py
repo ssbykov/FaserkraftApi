@@ -3,10 +3,8 @@ import json
 
 import qrcode
 
-from app.database.schemas.qr_data import QRData
 
-
-def generate_qr_code(qr_json: QRData) -> bytes:
+def generate_qr_code(qr_json: dict[str, str | int]) -> bytes:
     data = json.dumps(qr_json, ensure_ascii=False)
 
     img = qrcode.make(data=data, box_size=5)

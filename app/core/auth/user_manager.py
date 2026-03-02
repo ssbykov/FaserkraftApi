@@ -52,12 +52,8 @@ class UserManager(IntegerIDMixin, BaseUserManager[User, int]):
             }
             run_process_mail.delay(None, context=context, action="forgot_password")
         elif suffix_path == "generate-qr":
-            qr_data = QRData(
-                action="register",
-                id=user.id,
-                token=token,
-            )
-            qr_code_bytes = generate_qr_code(qr_data)
+            qr_json = {"action": "register", "id": user.id, "token": token}
+            qr_code_bytes = generate_qr_code(qr_json)
             context = {
                 "name": user.email,
                 "user_email": user.email,
