@@ -11,6 +11,7 @@ from fastapi_users.schemas import UC
 
 from app.core import settings, config
 from app.database.models import User
+from app.database.schemas.qr_data import QRData
 from app.tasks import run_process_mail
 from app.utils.qr_code_gentrator import generate_qr_code
 
@@ -51,14 +52,22 @@ class UserManager(IntegerIDMixin, BaseUserManager[User, int]):
             }
             run_process_mail.delay(None, context=context, action="forgot_password")
         elif suffix_path == "generate-qr":
-            qr_json = {"action": "register", "id": user.id, "token": token}
-            qr_code_bytes = generate_qr_code(qr_json)
+            qr_data = QRData(
+                action="register",
+                id=user.id,
+                token=token,
+            )
+            qr_code_bytes = generate_qr_code(qr_data)
             context = {
                 "name": user.email,
                 "user_email": user.email,
                 "qr_code_bytes": qr_code_bytes,
             }
             run_process_mail.delay(None, context=context, action="send_qr")
+
+        elif suffix_path == "get-qr-code":
+            qr_json = {"action": "register", "id": user.id, "token": token}
+            request.state.qr_data = qr_json
 
     async def on_after_request_verify(
         self,
