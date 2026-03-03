@@ -16,7 +16,11 @@ from app.database.crud.products import ProductRepository, get_product_repo
 from app.database.models import User
 from app.database.models.employee import Role
 from app.database.models.product import ProductStatus
-from app.database.schemas.product import ProductRead, ProductCreate
+from app.database.schemas.product import (
+    ProductRead,
+    ProductCreate,
+    ProductsCountByLastStepRead,
+)
 
 router = APIRouter(
     tags=["Products"],
@@ -124,6 +128,28 @@ async def get_product(
         raise HTTPException(
             status_code=500,
             detail="Произошла внутренняя ошибка при получении продукта",
+        )
+
+
+@router.get(
+    "/stats/by-last-done-step",
+    response_model=list[ProductsCountByLastStepRead],
+    status_code=status.HTTP_200_OK,
+)
+async def get_products_stats_by_last_done_step(
+    repo: Annotated[ProductRepository, Depends(get_product_repo)],
+    # user: Annotated[User, Depends(current_user)],
+) -> list[ProductsCountByLastStepRead]:
+    try:
+        data = await repo.get_counts_by_last_done_step()
+        # data — список dict, как мы возвращаем из репозитория
+        return [ProductsCountByLastStepRead(**item) for item in data]
+    except HTTPException as exc:
+        raise exc
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail="Произошла внутренняя ошибка при получении статистики по продуктам",
         )
 
 

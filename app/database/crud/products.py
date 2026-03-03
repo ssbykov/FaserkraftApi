@@ -1,10 +1,17 @@
 from typing import Optional
 
 from fastapi import HTTPException
-from sqlalchemy import select
-from sqlalchemy.orm import joinedload, selectinload
+from sqlalchemy import select, func, desc
+from sqlalchemy.orm import joinedload, selectinload, aliased
 
-from app.database import Product, ProductStep, SessionDep, StepDefinition, Process
+from app.database import (
+    Product,
+    ProductStep,
+    SessionDep,
+    StepDefinition,
+    Process,
+    StepTemplate,
+)
 from app.database.crud.mixines import GetBackNextIdMixin
 from app.database.models.product import ProductStatus
 from app.database.models.product_step import StepStatus
@@ -206,3 +213,55 @@ class ProductRepository(GetBackNextIdMixin[Product]):
 
         await self.session.refresh(product)
         return product
+
+    async def get_counts_by_last_done_step(self):
+
+        ps_alias = aliased(ProductStep)
+        sd_alias = aliased(StepDefinition)
+
+        subq = (
+            select(
+                ps_alias.product_id,
+                ps_alias.step_definition_id,
+                func.row_number()
+                .over(
+                    partition_by=ps_alias.product_id,
+                    order_by=desc(sd_alias.order),
+                )
+                .label("rn"),
+            )
+            .join(sd_alias, sd_alias.id == ps_alias.step_definition_id)
+            .where(ps_alias.status == StepStatus.done)
+            .subquery()
+        )
+
+        # Основной запрос
+        stmt = (
+            select(
+                Product.process_id,
+                Process.name.label(
+                    "process_name"
+                ),  # предполагается поле name у Process
+                subq.c.step_definition_id,
+                StepTemplate.name.label("step_name"),  # берем имя из StepTemplate
+                func.count(Product.id).label("count"),
+            )
+            .join(subq, subq.c.product_id == Product.id)
+            .join(StepDefinition, StepDefinition.id == subq.c.step_definition_id)
+            .join(
+                StepTemplate, StepTemplate.id == StepDefinition.template_id
+            )  # присоединяем StepTemplate
+            .join(Process, Process.id == Product.process_id)
+            .where(Product.status == ProductStatus.normal)
+            .where(subq.c.rn == 1)
+            .group_by(
+                Product.process_id,
+                Process.name,
+                subq.c.step_definition_id,
+                StepTemplate.name,
+            )
+        )
+
+        result = await self.session.execute(stmt)
+        rows = result.all()
+        return [dict(row._mapping) for row in rows]

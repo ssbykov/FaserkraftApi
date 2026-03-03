@@ -34,3 +34,18 @@ class ProductRead(ProductBase):
         "from_attributes": True,
         "use_enum_values": True,
     }
+
+
+class ProductsCountByLastStepRead(BaseSchema):
+    """
+    Статистика количества продуктов по процессу и последнему выполненному шагу.
+    """
+
+    process_id: int
+    process_name: str  # название процесса (из таблицы processes)
+    step_definition_id: int  # идентификатор последнего выполненного шага
+    step_name: str  # название шага (из step_templates)
+    count: int  # количество продуктов в данной группе
+
+    class Config:
+        from_attributes = True  # для возможной работы с ORM-объектами
