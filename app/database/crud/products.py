@@ -226,7 +226,10 @@ class ProductRepository(GetBackNextIdMixin[Product]):
                 func.row_number()
                 .over(
                     partition_by=ps_alias.product_id,
-                    order_by=desc(sd_alias.order),
+                    order_by=(
+                        desc(sd_alias.order),
+                        desc(ps_alias.accepted_at),
+                    ),
                 )
                 .label("rn"),
             )
