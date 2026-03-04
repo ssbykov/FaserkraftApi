@@ -17,9 +17,6 @@ router = APIRouter(
     tags=["Step definitions"],
     prefix=settings.api.v1.step_definitions,
 )
-router.include_router(
-    router,
-)
 
 
 @router.get(

@@ -13,9 +13,6 @@ router = APIRouter(
     tags=["Packaging"],
     prefix=settings.api.v1.processes,
 )
-router.include_router(
-    router,
-)
 
 
 @router.post(

@@ -14,9 +14,6 @@ router = APIRouter(
     tags=["Processes"],
     prefix=settings.api.v1.processes,
 )
-router.include_router(
-    router,
-)
 
 
 @router.get(

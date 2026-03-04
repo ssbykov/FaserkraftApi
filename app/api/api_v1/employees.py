@@ -15,10 +15,6 @@ router = APIRouter(
     tags=["Employees"],
     prefix=settings.api.v1.employees,
 )
-router.include_router(
-    router,
-)
-
 
 @router.get(
     "/",

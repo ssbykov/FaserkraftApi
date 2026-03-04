@@ -2,7 +2,6 @@ from datetime import date
 from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Mapped
 from starlette import status
 
 from app.api.api_v1.fastapi_users import current_user
@@ -22,9 +21,6 @@ from app.database.schemas.product import ProductRead
 router = APIRouter(
     tags=["Products_Steps"],
     prefix=settings.api.v1.products_steps,
-)
-router.include_router(
-    router,
 )
 
 

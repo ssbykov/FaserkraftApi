@@ -19,17 +19,13 @@ from app.database.models.product import ProductStatus
 from app.database.schemas.product import (
     ProductRead,
     ProductCreate,
-    ProductsCountByLastStepRead,
+    ProductsCountByLastStepRead, ProductsFinishedRead,
 )
 
 router = APIRouter(
     tags=["Products"],
     prefix=settings.api.v1.products,
 )
-router.include_router(
-    router,
-)
-
 
 @router.post("/", response_model=ProductRead, status_code=status.HTTP_201_CREATED)
 async def create_product(
@@ -108,7 +104,7 @@ async def create_product(
 
 
 @router.get(
-    "/{serial_number}",
+    "/by-serial/{serial_number}",
     response_model=ProductRead,
     status_code=status.HTTP_200_OK,
 )
@@ -150,6 +146,26 @@ async def get_products_stats_by_last_done_step(
         raise HTTPException(
             status_code=500,
             detail="Произошла внутренняя ошибка при получении статистики по продуктам",
+        )
+
+@router.get(
+    "/finished",
+    response_model=list[ProductsFinishedRead],
+    status_code=status.HTTP_200_OK,
+)
+async def get_finished_products(
+    repo: Annotated[ProductRepository, Depends(get_product_repo)],
+    # user: Annotated[User, Depends(current_user)],
+) -> list[ProductsFinishedRead]:
+    try:
+        products = await repo.get_finished_products()
+        return [ProductsFinishedRead.model_validate(p) for p in products]
+    except HTTPException as exc:
+        raise exc
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail="Произошла внутренняя ошибка при получении списка завершённых продуктов",
         )
 
 
