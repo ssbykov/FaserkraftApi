@@ -1,10 +1,10 @@
 from typing import Optional
 
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import joinedload
 
-from app.database import SessionDep
+from app.database import SessionDep, Product
 from app.database.crud.mixines import GetBackNextIdMixin
 from app.database.models import Packaging
 from app.database.schemas.packaging import PackagingCreate
@@ -21,7 +21,19 @@ class PackagingRepository(GetBackNextIdMixin[Packaging]):
         self.session.add(packaging)
 
         try:
+            # сначала создаём упаковку, чтобы получить её id
             await self.session.flush()
+            await self.session.refresh(packaging)
+
+            # если есть список продуктов — обновляем их
+            if packaging_in.products:
+                stmt = (
+                    update(Product)
+                    .where(Product.id.in_(packaging_in.products))
+                    .values(packaging_id=packaging.id)
+                )
+                await self.session.execute(stmt)
+
             await self.session.commit()
         except Exception as e:
             print(e)
