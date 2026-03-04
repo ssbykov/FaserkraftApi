@@ -20,7 +20,7 @@ class Packaging(BaseWithId):
     performed_by = relationship(
         "Employee",
         foreign_keys=[performed_by_id],
-        back_populates="product_steps_performed",
+        back_populates="packaging_performed",
     )
 
 

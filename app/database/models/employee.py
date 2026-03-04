@@ -40,6 +40,11 @@ class Employee(BaseWithId):
         back_populates="accepted_by",
         foreign_keys="ProductStep.accepted_by_id",
     )
+    packaging_performed = relationship(
+        "Packaging",
+        back_populates="performed_by",
+        foreign_keys="Packaging.performed_by_id",
+    )
 
     def __repr__(self):
         return self.name
