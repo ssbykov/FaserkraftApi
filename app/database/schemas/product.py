@@ -6,7 +6,7 @@ from pydantic import Field
 
 from app.database import BaseSchema, Product
 from app.database.models.product import ProductStatus
-from app.database.schemas.process import ProcessRead
+from app.database.schemas.process import ProcessRead, ProcessReadBase
 from app.database.schemas.product_step import ProductStepRead
 
 
@@ -34,6 +34,13 @@ class ProductRead(ProductBase):
         "from_attributes": True,
         "use_enum_values": True,
     }
+
+class ProductsFinishedRead(ProductBase):
+    id: int
+    work_process: ProcessReadBase
+
+    class Config:
+        from_attributes = True
 
 
 class ProductsCountByLastStepRead(BaseSchema):
