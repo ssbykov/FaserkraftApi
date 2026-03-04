@@ -5,6 +5,7 @@ from starlette import status
 
 from app.api.api_v1.fastapi_users import current_user
 from app.core import settings
+from app.database.crud.employees import EmployeeRepository, get_employee_repo
 from app.database.crud.packaging import get_packaging_repo, PackagingRepository
 from app.database.models import User, Packaging
 from app.database.schemas.packaging import PackagingRead, PackagingCreate
@@ -21,12 +22,14 @@ router = APIRouter(
     status_code=status.HTTP_201_CREATED,
 )
 async def create_packaging(
-    packaging_in: PackagingCreate,
+    data: PackagingCreate,
     repo: Annotated[PackagingRepository, Depends(get_packaging_repo)],
+    employee_repo: Annotated[EmployeeRepository, Depends(get_employee_repo)],
     user: Annotated[User, Depends(current_user)],
 ) -> Packaging:
     try:
-        packaging = await repo.create_packaging(packaging_in)
+        employee = await employee_repo.get_by_user_id(user.id)
+        packaging = await repo.create_packaging(packaging_in=data, employee_id=employee.id)
         return packaging
     except HTTPException as exc:
         raise exc

@@ -10,7 +10,6 @@ class PackagingBase(BaseSchema):
 
 class PackagingCreate(PackagingBase):
     products: List[int]
-    employee_id: int
 
 class PackagingRead(PackagingCreate):
     id: int

@@ -17,10 +17,14 @@ def get_packaging_repo(session: SessionDep) -> "PackagingRepository":
 class PackagingRepository(GetBackNextIdMixin[Packaging]):
     model = Packaging
 
-    async def create_packaging(self, packaging_in: PackagingCreate) -> Packaging:
+    async def create_packaging(
+            self,
+            packaging_in: PackagingCreate,
+            *,
+            employee_id: int,
+    ) -> Packaging:
         packaging = packaging_in.to_orm()
-
-        packaging.performed_by_id = packaging_in.employee_id
+        packaging.performed_by_id = employee_id
         packaging.performed_at = datetime.now(timezone.utc)
 
         self.session.add(packaging)
