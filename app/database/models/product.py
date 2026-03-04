@@ -39,6 +39,10 @@ class Product(BaseWithId):
         server_default=ProductStatus.normal.value,
     )
 
+    packaging_id = Column(ForeignKey("packaging.id"), nullable=True)
+
+    packaging = relationship("Packaging", back_populates="products", lazy="selectin")
+
     work_process = relationship("Process", back_populates="products")
     steps = relationship(
         "ProductStep",

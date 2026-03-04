@@ -1,4 +1,5 @@
 from .base import BaseWithId, Base
+from .packaging import Packaging
 from .user import User
 from .access_token import AccessToken
 from .backup_db import BackupDb
@@ -19,6 +20,7 @@ __all__ = [
     "Employee",
     "Process",
     "Product",
+    "Packaging",
     "ProductStep",
     "StepTemplate",
     "StepDefinition",

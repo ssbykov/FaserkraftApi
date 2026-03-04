@@ -1,4 +1,5 @@
 from .backup_db import BackupDbAdmin
+from .packaging import PackagingAdmin
 from .user import UserAdmin
 from .process import ProcessAdmin
 from .step_definition import StepDefinitionAdmin
@@ -17,6 +18,7 @@ __all__ = [
     "StepDefinitionAdmin",
     "StepTemplateAdmin",
     "ProductAdmin",
+    "PackagingAdmin",
     "ProductStepAdmin",
     "EmployeeAdmin",
     "DeviceAdmin",

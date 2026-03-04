@@ -19,7 +19,6 @@ class DeviceRepository(GetBackNextIdMixin[Device]):
             await self.session.flush()
             await self.session.commit()
         except Exception as e:
-            print(e)
             await self.session.rollback()
             raise
 

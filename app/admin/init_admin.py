@@ -31,6 +31,7 @@ from .model_views import (
     DeviceAdmin,
     DailyPlanAdmin,
     DailyPlanStepAdmin,
+    PackagingAdmin,
 )
 from .save_result import SaveResult
 
@@ -47,6 +48,7 @@ async def init_admin(app: Any) -> "NewAdmin":
     admin.add_view(StepDefinitionAdmin)
     admin.add_view(StepTemplateAdmin)
     admin.add_view(ProductAdmin)
+    admin.add_view(PackagingAdmin)
     admin.add_view(BackupDbAdmin)
     admin.add_view(UserAdmin)
     admin.add_view(EmployeeAdmin)

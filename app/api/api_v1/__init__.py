@@ -5,6 +5,7 @@ from app.core import settings
 from .auth import router as auth_router
 from .users import router as users_router
 from .products import router as products_router
+from .packaging import router as packaging_router
 from .processes import router as processes_router
 from .products_steps import router as products_steps_router
 from .day_plans import router as day_plans_router
@@ -23,6 +24,7 @@ router = APIRouter(
 router.include_router(router=auth_router)
 router.include_router(router=users_router)
 router.include_router(router=products_router)
+router.include_router(router=packaging_router)
 router.include_router(router=processes_router)
 router.include_router(router=products_steps_router)
 router.include_router(router=day_plans_router)

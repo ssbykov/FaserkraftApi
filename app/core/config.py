@@ -42,6 +42,7 @@ class ApiV1Prefix(BaseModel):
     users: str = "/users"
     products: str = "/products"
     processes: str = "/processes"
+    packaging: str = "/packaging"
     step_definitions: str = "/step_definitions"
     employees: str = "/employees"
     products_steps: str = "/products_steps"
@@ -121,7 +122,7 @@ class Settings(BaseSettings):
 
 ENV_MAP = {
     "dev": ROOT.parent / ".env_dev",
-    "prod": ROOT.parent / ".env",
+    "prod": ROOT.parent / ".env_dev",
 }
 
 

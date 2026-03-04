@@ -28,6 +28,7 @@ class ProductAdmin(
         "work_process",
         "created_at",
         "steps",
+        "packaging",
     )
 
     column_filters = [ProcessNameFilter()]
@@ -37,6 +38,7 @@ class ProductAdmin(
         "work_process": "Техпроцесс",
         "created_at": "Запуск в производство",
         "steps": "Этапы",
+        "packaging": "Упаковка",
     }
 
     form_rules = [
