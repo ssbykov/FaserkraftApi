@@ -3,10 +3,14 @@ from typing import List
 from app.database import BaseSchema
 from app.database.schemas.step_definition import StepDefinitionRead
 
-
-class ProcessRead(BaseSchema):
+class ProcessReadBase(BaseSchema):
     id: int
     name: str
+    model_config = {"from_attributes": True}
+
+
+
+class ProcessRead(ProcessReadBase):
     description: str | None = None
     steps: List[StepDefinitionRead]
 
