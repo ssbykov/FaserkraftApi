@@ -42,10 +42,10 @@ class ProductsCountByLastStepRead(BaseSchema):
     """
 
     process_id: int
-    process_name: str  # название процесса (из таблицы processes)
-    step_definition_id: int  # идентификатор последнего выполненного шага
-    step_name: str  # название шага (из step_templates)
-    count: int  # количество продуктов в данной группе
+    process_name: str
+    step_definition_id: int
+    step_name: str
+    count: int
 
     class Config:
-        from_attributes = True  # для возможной работы с ORM-объектами
+        from_attributes = True
