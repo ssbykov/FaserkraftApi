@@ -1,3 +1,5 @@
+from typing import List
+
 from app.database import BaseSchema
 
 
@@ -7,7 +9,7 @@ class PackagingBase(BaseSchema):
     model_config = {"from_attributes": True}
 
 class PackagingCreate(PackagingBase):
-    pass
+    products: List[int] | None = None
 
-class PackagingRead(PackagingBase):
+class PackagingRead(PackagingCreate):
     id: int
