@@ -268,3 +268,31 @@ class ProductRepository(GetBackNextIdMixin[Product]):
         result = await self.session.execute(stmt)
         rows = result.all()
         return [dict(row._mapping) for row in rows]
+
+    async def get_finished_products(self) -> list[Product]:
+        """
+        Продукты со статусом normal, у которых все шаги завершены (StepStatus.done).
+        """
+
+        # подзапрос: есть ли у продукта хотя бы один НЕ завершённый шаг
+        not_done_exists = (
+            select(ProductStep.id)
+            .where(
+                ProductStep.product_id == Product.id,
+                ProductStep.status != StepStatus.done,
+            )
+            .exists()
+        )
+
+        stmt = (
+            select(Product)
+            .where(Product.status == ProductStatus.normal)
+            .where(~not_done_exists)  # NOT EXISTS not-done шага
+            .options(
+                selectinload(Product.work_process),
+            )
+        )
+
+        result = await self.session.execute(stmt)
+        
+        return list(result.scalars().all())
