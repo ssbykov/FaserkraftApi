@@ -134,7 +134,7 @@ async def get_product(
 )
 async def get_products_stats_by_last_done_step(
     repo: Annotated[ProductRepository, Depends(get_product_repo)],
-    # user: Annotated[User, Depends(current_user)],
+    user: Annotated[User, Depends(current_user)],
 ) -> list[ProductsCountByLastStepRead]:
     try:
         data = await repo.get_counts_by_last_done_step()
@@ -155,7 +155,7 @@ async def get_products_stats_by_last_done_step(
 )
 async def get_finished_products(
     repo: Annotated[ProductRepository, Depends(get_product_repo)],
-    # user: Annotated[User, Depends(current_user)],
+    user: Annotated[User, Depends(current_user)],
 ) -> list[ProductsFinishedRead]:
     try:
         products = await repo.get_finished_products()
