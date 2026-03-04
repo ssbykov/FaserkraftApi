@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import HTTPException
@@ -18,6 +19,10 @@ class PackagingRepository(GetBackNextIdMixin[Packaging]):
 
     async def create_packaging(self, packaging_in: PackagingCreate) -> Packaging:
         packaging = packaging_in.to_orm()
+
+        packaging.performed_by_id = packaging_in.employee_id
+        packaging.performed_at = datetime.now(timezone.utc)
+
         self.session.add(packaging)
 
         try:

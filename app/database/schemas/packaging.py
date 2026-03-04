@@ -9,7 +9,8 @@ class PackagingBase(BaseSchema):
     model_config = {"from_attributes": True}
 
 class PackagingCreate(PackagingBase):
-    products: List[int] | None = None
+    products: List[int]
+    employee_id: int
 
 class PackagingRead(PackagingCreate):
     id: int
