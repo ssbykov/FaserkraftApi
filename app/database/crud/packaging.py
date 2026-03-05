@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Optional, List
 
 from fastapi import HTTPException
 from sqlalchemy import select, update
@@ -21,10 +21,9 @@ class PackagingRepository(GetBackNextIdMixin[Packaging]):
             self,
             packaging_in: PackagingCreate,
             *,
-            employee_id: int,
+            products: List[int],
     ) -> Packaging:
         packaging = packaging_in.to_orm()
-        packaging.performed_by_id = employee_id
         packaging.performed_at = datetime.now(timezone.utc)
 
         self.session.add(packaging)
@@ -35,10 +34,10 @@ class PackagingRepository(GetBackNextIdMixin[Packaging]):
             await self.session.refresh(packaging)
 
             # если есть список продуктов — обновляем их
-            if packaging_in.products:
+            if products:
                 stmt = (
                     update(Product)
-                    .where(Product.id.in_(packaging_in.products))
+                    .where(Product.id.in_(products))
                     .values(packaging_id=packaging.id)
                 )
                 await self.session.execute(stmt)

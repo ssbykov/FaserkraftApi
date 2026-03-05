@@ -8,7 +8,7 @@ from app.core import settings
 from app.database.crud.employees import EmployeeRepository, get_employee_repo
 from app.database.crud.packaging import get_packaging_repo, PackagingRepository
 from app.database.models import User, Packaging
-from app.database.schemas.packaging import PackagingRead, PackagingCreate
+from app.database.schemas.packaging import PackagingRead, PackagingCreate, PackagingCreateWithProducts
 
 router = APIRouter(
     tags=["Packaging"],
@@ -22,14 +22,22 @@ router = APIRouter(
     status_code=status.HTTP_201_CREATED,
 )
 async def create_packaging(
-    data: PackagingCreate,
+    data: PackagingCreateWithProducts,
     repo: Annotated[PackagingRepository, Depends(get_packaging_repo)],
     employee_repo: Annotated[EmployeeRepository, Depends(get_employee_repo)],
     user: Annotated[User, Depends(current_user)],
 ) -> Packaging:
     try:
         employee = await employee_repo.get_by_user_id(user.id)
-        packaging = await repo.create_packaging(packaging_in=data, employee_id=employee.id)
+        packaging = PackagingCreate(
+            serial_number=data.serial_number,
+            performed_at=data.performed_at,
+            performed_by_id=employee.id,
+        )
+        packaging = await repo.create_packaging(
+            packaging_in=packaging,
+            products=data.products
+        )
         return packaging
     except HTTPException as exc:
         raise exc
