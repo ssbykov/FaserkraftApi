@@ -255,7 +255,7 @@ class ProductRepository(GetBackNextIdMixin[Product]):
                 StepTemplate, StepTemplate.id == StepDefinition.template_id
             )  # присоединяем StepTemplate
             .join(Process, Process.id == Product.process_id)
-            .where(Product.status == ProductStatus.normal)
+            .where(Product.status == ProductStatus.normal, Product.packaging_id is None)
             .where(subq.c.rn == 1)
             .group_by(
                 Product.process_id,
