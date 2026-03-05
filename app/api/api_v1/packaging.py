@@ -12,12 +12,12 @@ from app.database.schemas.packaging import PackagingRead, PackagingCreate
 
 router = APIRouter(
     tags=["Packaging"],
-    prefix=settings.api.v1.processes,
+    prefix=settings.api.v1.packaging,
 )
 
 
 @router.post(
-    "/",
+    "",
     response_model=PackagingRead,
     status_code=status.HTTP_201_CREATED,
 )

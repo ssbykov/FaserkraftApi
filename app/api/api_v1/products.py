@@ -27,7 +27,10 @@ router = APIRouter(
     prefix=settings.api.v1.products,
 )
 
-@router.post("/", response_model=ProductRead, status_code=status.HTTP_201_CREATED)
+@router.post("",
+             response_model=ProductRead,
+             status_code=status.HTTP_201_CREATED
+             )
 async def create_product(
     product_in: ProductCreate,
     repo: Annotated[ProductRepository, Depends(get_product_repo)],
