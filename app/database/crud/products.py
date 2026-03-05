@@ -255,7 +255,7 @@ class ProductRepository(GetBackNextIdMixin[Product]):
                 StepTemplate, StepTemplate.id == StepDefinition.template_id
             )  # присоединяем StepTemplate
             .join(Process, Process.id == Product.process_id)
-            .where(Product.status == ProductStatus.normal, Product.packaging_id.is_(None))
+            .where(Product.status == ProductStatus.normal)
             .where(subq.c.rn == 1)
             .group_by(
                 Product.process_id,
@@ -286,8 +286,11 @@ class ProductRepository(GetBackNextIdMixin[Product]):
 
         stmt = (
             select(Product)
-            .where(Product.status == ProductStatus.normal)
-            .where(~not_done_exists)  # NOT EXISTS not-done шага
+            .where(
+                Product.status == ProductStatus.normal,
+                Product.packaging_id.is_(None),
+                ~not_done_exists,
+                )
             .options(
                 selectinload(Product.work_process),
             )
