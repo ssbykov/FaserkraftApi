@@ -296,6 +296,7 @@ class ProductRepository(GetBackNextIdMixin[Product]):
             ]
 
         if employee_id is not None:
+            # последний выполненный шаг продукта (по порядку StepDefinition.order)
             last_step_step_def_id_subq = (
                 select(ProductStep.step_definition_id)
                 .join(StepDefinition, StepDefinition.id == ProductStep.step_definition_id)
@@ -308,18 +309,18 @@ class ProductRepository(GetBackNextIdMixin[Product]):
                 .scalar_subquery()
             )
 
-            daily_plan_steps_exists = (
-                select(DailyPlanStep.id)
+            # множество step_definition_id из дневного плана сотрудника на сегодня
+            plan_step_def_ids_subq = (
+                select(DailyPlanStep.step_definition_id)
                 .join(DailyPlan, DailyPlanStep.daily_plan_id == DailyPlan.id)
                 .where(
                     DailyPlan.date == today,
                     DailyPlan.employee_id == employee_id,
-                    DailyPlanStep.step_definition_id == last_step_step_def_id_subq,
                     )
-                .exists()
             )
 
-            conditions.append(daily_plan_steps_exists)
+            # пересечение: последний шаг продукта должен быть в плане
+            conditions.append(last_step_step_def_id_subq.in_(plan_step_def_ids_subq))
 
         stmt = (
             select(Product)
