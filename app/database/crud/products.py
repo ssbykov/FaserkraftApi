@@ -296,8 +296,8 @@ class ProductRepository(GetBackNextIdMixin[Product]):
             ]
 
         if employee_id is not None:
-            last_step_subq = (
-                select(ProductStep)
+            last_step_step_def_id_subq = (
+                select(ProductStep.step_definition_id)
                 .join(StepDefinition, StepDefinition.id == ProductStep.step_definition_id)
                 .where(
                     ProductStep.product_id == Product.id,
@@ -305,7 +305,7 @@ class ProductRepository(GetBackNextIdMixin[Product]):
                     )
                 .order_by(StepDefinition.order.desc())
                 .limit(1)
-                .subquery()
+                .scalar_subquery()
             )
 
             daily_plan_steps_exists = (
@@ -314,7 +314,7 @@ class ProductRepository(GetBackNextIdMixin[Product]):
                 .where(
                     DailyPlan.date == today,
                     DailyPlan.employee_id == employee_id,
-                    DailyPlanStep.step_definition_id == last_step_subq.c.step_definition_id,
+                    DailyPlanStep.step_definition_id == last_step_step_def_id_subq,
                     )
                 .exists()
             )
