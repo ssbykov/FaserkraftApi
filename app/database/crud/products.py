@@ -1,3 +1,4 @@
+from datetime import date as date_type
 from typing import Optional
 
 from fastapi import HTTPException
@@ -10,9 +11,10 @@ from app.database import (
     SessionDep,
     StepDefinition,
     Process,
-    StepTemplate,
+    StepTemplate, DailyPlan,
 )
 from app.database.crud.mixines import GetBackNextIdMixin
+from app.database.models import DailyPlanStep
 from app.database.models.product import ProductStatus
 from app.database.models.product_step import StepStatus
 from app.database.schemas.product import ProductCreate
@@ -269,33 +271,61 @@ class ProductRepository(GetBackNextIdMixin[Product]):
         rows = result.all()
         return [dict(row._mapping) for row in rows]
 
-    async def get_finished_products(self) -> list[Product]:
-        """
-        Продукты со статусом normal, у которых все шаги завершены (StepStatus.done).
-        """
 
-        # подзапрос: есть ли у продукта хотя бы один НЕ завершённый шаг
+    async def get_finished_products(
+            self,
+            *,
+            employee_id: int | None = None,
+    ) -> list[Product]:
+        today = date_type.today()
+
         not_done_exists = (
             select(ProductStep.id)
             .where(
                 ProductStep.product_id == Product.id,
                 ProductStep.status != StepStatus.done,
-            )
+                )
             .exists()
         )
 
+        # базовые условия «завершённого» продукта
+        conditions = [
+            Product.status == ProductStatus.normal,
+            Product.packaging_id.is_(None),
+            ~not_done_exists,
+            ]
+
+        if employee_id is not None:
+            last_step_subq = (
+                select(ProductStep)
+                .join(StepDefinition, StepDefinition.id == ProductStep.step_definition_id)
+                .where(
+                    ProductStep.product_id == Product.id,
+                    ProductStep.status == StepStatus.done,
+                    )
+                .order_by(StepDefinition.order.desc())
+                .limit(1)
+                .subquery()
+            )
+
+            daily_plan_steps_exists = (
+                select(DailyPlanStep.id)
+                .join(DailyPlan, DailyPlanStep.daily_plan_id == DailyPlan.id)
+                .where(
+                    DailyPlan.date == today,
+                    DailyPlan.employee_id == employee_id,
+                    DailyPlanStep.step_definition_id == last_step_subq.c.step_definition_id,
+                    )
+                .exists()
+            )
+
+            conditions.append(daily_plan_steps_exists)
+
         stmt = (
             select(Product)
-            .where(
-                Product.status == ProductStatus.normal,
-                Product.packaging_id.is_(None),
-                ~not_done_exists,
-                )
-            .options(
-                selectinload(Product.work_process),
-            )
+            .where(*conditions)
+            .options(selectinload(Product.work_process))
         )
 
         result = await self.session.execute(stmt)
-
         return list(result.scalars().all())

@@ -158,10 +158,15 @@ async def get_products_stats_by_last_done_step(
 )
 async def get_finished_products(
     repo: Annotated[ProductRepository, Depends(get_product_repo)],
+    employee_repo: Annotated[EmployeeRepository, Depends(get_employee_repo)],
     user: Annotated[User, Depends(current_user)],
 ) -> list[ProductsFinishedRead]:
     try:
-        products = await repo.get_finished_products()
+        employee = await employee_repo.get_by_user_id(user.id)
+        employee_id = None
+        if employee.role not in [Role.admin, Role.master]:
+            employee_id = employee.id
+        products = await repo.get_finished_products(employee_id = employee_id)
         return [ProductsFinishedRead.model_validate(p) for p in products]
     except HTTPException as exc:
         raise exc
