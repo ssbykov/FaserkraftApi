@@ -23,17 +23,32 @@ class PackagingRepository(GetBackNextIdMixin[Packaging]):
             *,
             products: List[int],
     ) -> Packaging:
-        packaging = packaging_in.to_orm()
-        packaging.performed_at = datetime.now(timezone.utc)
+        # ищем существующую упаковку по serial_number
+        stmt = select(Packaging).where(
+            Packaging.serial_number == packaging_in.serial_number
+        )
+        res = await self.session.execute(stmt)
+        packaging = res.scalar_one_or_none()
+
+        now_utc = datetime.now(timezone.utc)
+
+        if packaging is None:
+            # создаём новую упаковку из входной схемы
+            packaging = packaging_in.to_orm()
+            packaging.performed_at = now_utc
+        else:
+            # если упаковка есть — меняем только executed‑поля
+            packaging.performed_at = now_utc
+            packaging.performed_by_id = packaging_in.performed_by_id
 
         self.session.add(packaging)
 
         try:
-            # сначала создаём упаковку, чтобы получить её id
+            # получаем id (для новой упаковки)
             await self.session.flush()
             await self.session.refresh(packaging)
 
-            # если есть список продуктов — обновляем их
+            # products всегда “перепривязываем” к этой упаковке
             if products:
                 stmt = (
                     update(Product)
@@ -43,8 +58,7 @@ class PackagingRepository(GetBackNextIdMixin[Packaging]):
                 await self.session.execute(stmt)
 
             await self.session.commit()
-        except Exception as e:
-            print(e)
+        except Exception:
             await self.session.rollback()
             raise
 
