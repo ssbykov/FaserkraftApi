@@ -84,3 +84,34 @@ class PackagingRepository(GetBackNextIdMixin[Packaging]):
 
         await self.session.refresh(packaging)
         return packaging
+
+    async def get(
+        self,
+        *,
+        id: Optional[int] = None,
+        serial_number: Optional[str] = None,
+    ) -> Packaging:
+        if id is None and serial_number is None:
+            raise ValueError("Нужно указать id или serial_number")
+        if id is not None and serial_number is not None:
+            raise ValueError("Укажи только одно из: id или serial_number")
+
+        stmt = select(self.model).options(
+            joinedload(self.model.products),  # если надо подтянуть продукты
+        )
+
+        if id is not None:
+            stmt = stmt.where(self.model.id == id)
+        else:
+            stmt = stmt.where(self.model.serial_number == serial_number)
+
+        packaging = await self.session.scalar(stmt)
+
+        if packaging is not None:
+            return packaging
+
+        ident = id if id is not None else serial_number
+        raise HTTPException(
+            status_code=404,
+            detail=f"Упаковка с идентификатором {ident} не найдена",
+        )
