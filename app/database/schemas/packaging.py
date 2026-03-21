@@ -6,6 +6,7 @@ from pydantic import Field
 
 from app.database import BaseSchema
 from app.database.models import Packaging
+from app.database.schemas.employee import EmployeeRead
 from app.database.schemas.product import ProductsFinishedRead
 
 
@@ -15,7 +16,7 @@ class PackagingBase(BaseSchema):
     model_config = {"from_attributes": True}
 
 class PackagingCreate(PackagingBase):
-    performed_by_id: int = None
+    performed_by: EmployeeRead
     performed_at: datetime = Field(
         default_factory=lambda: datetime.now(ZoneInfo("Europe/Moscow"))
     )

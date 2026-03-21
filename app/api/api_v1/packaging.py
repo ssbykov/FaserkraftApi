@@ -8,6 +8,7 @@ from app.core import settings
 from app.database.crud.employees import EmployeeRepository, get_employee_repo
 from app.database.crud.packaging import get_packaging_repo, PackagingRepository
 from app.database.models import User, Packaging
+from app.database.schemas.employee import EmployeeRead
 from app.database.schemas.packaging import PackagingRead, PackagingCreate, PackagingCreateWithProducts
 
 router = APIRouter(
@@ -29,10 +30,14 @@ async def create_packaging(
 ) -> Packaging:
     try:
         employee = await employee_repo.get_by_user_id(user.id)
+        performed_by = EmployeeRead(
+            id=employee.id,
+            name=employee.name,
+        )
         packaging = PackagingCreate(
             serial_number=data.serial_number,
             performed_at=data.performed_at,
-            performed_by_id=employee.id,
+            performed_by=performed_by,
         )
         packaging = await repo.create_packaging(
             packaging_in=packaging,

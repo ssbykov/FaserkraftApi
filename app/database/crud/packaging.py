@@ -39,7 +39,7 @@ class PackagingRepository(GetBackNextIdMixin[Packaging]):
         else:
             # обновляем только эти поля
             packaging.performed_at = now_utc
-            packaging.performed_by_id = packaging_in.performed_by_id
+            packaging.performed_by_id = packaging_in.performed_by.id
 
         self.session.add(packaging)
 
