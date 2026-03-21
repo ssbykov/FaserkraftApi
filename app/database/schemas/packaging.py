@@ -17,16 +17,13 @@ class PackagingBase(BaseSchema):
 
 class PackagingCreate(PackagingBase):
     performed_by_id: int = None
-    performed_at: datetime = Field(
-        default_factory=lambda: datetime.now(ZoneInfo("Europe/Moscow"))
-    )
 
     base_class: ClassVar[Type[Packaging]] = Packaging
 
     class Config:
         from_attributes = True
 
-class PackagingCreateWithProducts(PackagingCreate):
+class PackagingCreateWithProducts(PackagingBase):
     products: List[int]
 
 class PackagingRead(PackagingCreate):

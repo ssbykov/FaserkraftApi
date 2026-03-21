@@ -34,12 +34,15 @@ class PackagingRepository(GetBackNextIdMixin[Packaging]):
 
         if packaging is None:
             # создаём новую упаковку
-            packaging = packaging_in.to_orm()
-            packaging.performed_at = now_utc
+            packaging = Packaging(
+                serial_number=packaging_in.serial_number,
+                performed_by_id = packaging_in.performed_by_id,
+                performed_at = now_utc
+            )
         else:
             # обновляем только эти поля
             packaging.performed_at = now_utc
-            packaging.performed_by_id = packaging_in.performed_by.id
+            packaging.performed_by_id = packaging_in.performed_by_id
 
         self.session.add(packaging)
 

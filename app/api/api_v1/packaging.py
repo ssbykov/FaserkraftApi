@@ -31,8 +31,7 @@ async def create_packaging(
         employee = await employee_repo.get_by_user_id(user.id)
         packaging = PackagingCreate(
             serial_number=data.serial_number,
-            performed_at=data.performed_at,
-            performed_by=employee.id,
+            performed_by_id=employee.id,
         )
         packaging = await repo.create_packaging(
             packaging_in=packaging,
