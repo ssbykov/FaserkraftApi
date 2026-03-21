@@ -13,6 +13,7 @@ from .daily_plan import DailyPlan
 from .device import Device
 from .yandex_token import YandexToken
 from .daily_plan_step import DailyPlanStep
+from .size_type import SizeType
 
 __all__ = [
     "BaseWithId",
@@ -31,4 +32,5 @@ __all__ = [
     "Device",
     "YandexToken",
     "DailyPlanStep",
+    "SizeType",
 ]

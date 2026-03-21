@@ -33,6 +33,7 @@ from .model_views import (
     DailyPlanStepAdmin,
     PackagingAdmin,
 )
+from .model_views.size_type import SizeTypeAdmin
 from .save_result import SaveResult
 
 
@@ -45,6 +46,7 @@ async def init_admin(app: Any) -> "NewAdmin":
         authentication_backend=AdminAuth(secret_key=settings.sql_admin.secret),
     )
     admin.add_view(ProcessAdmin)
+    admin.add_view(SizeTypeAdmin)
     admin.add_view(StepDefinitionAdmin)
     admin.add_view(StepTemplateAdmin)
     admin.add_view(ProductAdmin)

@@ -1,15 +1,16 @@
 from .backup_db import BackupDbAdmin
-from .packaging import PackagingAdmin
-from .user import UserAdmin
-from .process import ProcessAdmin
-from .step_definition import StepDefinitionAdmin
-from .step_template import StepTemplateAdmin
-from .product import ProductAdmin
-from .product_step import ProductStepAdmin
-from .employee import EmployeeAdmin
-from .device import DeviceAdmin
 from .daily_plan import DailyPlanAdmin
 from .daily_plan_step import DailyPlanStepAdmin
+from .device import DeviceAdmin
+from .employee import EmployeeAdmin
+from .packaging import PackagingAdmin
+from .process import ProcessAdmin
+from .product import ProductAdmin
+from .product_step import ProductStepAdmin
+from .size_type import SizeType
+from .step_definition import StepDefinitionAdmin
+from .step_template import StepTemplateAdmin
+from .user import UserAdmin
 
 __all__ = [
     "BackupDbAdmin",
@@ -24,4 +25,5 @@ __all__ = [
     "DeviceAdmin",
     "DailyPlanAdmin",
     "DailyPlanStepAdmin",
+    "SizeType",
 ]

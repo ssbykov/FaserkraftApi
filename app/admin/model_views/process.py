@@ -19,20 +19,23 @@ class ProcessAdmin(
 
     column_labels = {
         "name": "Название",
+        "size_type": "Типоразмер",
         "description": "Описание",
         "steps": "Этапы",
     }
 
-    column_list = ("name", "description")
+    column_list = ("name", "size_type")
 
     column_details_list = (
         "name",
+        "size_type",
         "description",
         "steps",
     )
 
     form_rules = [
         "name",
+        "size_type",
         "description",
     ]
 
