@@ -21,6 +21,7 @@ class Packaging(BaseWithId):
         "Employee",
         foreign_keys=[performed_by_id],
         back_populates="packaging_performed",
+        lazy="selectin",
     )
 
 
