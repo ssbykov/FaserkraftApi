@@ -145,6 +145,10 @@ class ProductRepository(GetBackNextIdMixin[Product]):
         if product is None:
             raise ValueError("Продукт не найден")
 
+        if product.packaging_id:
+            raise HTTPException(status_code=409, detail="Запрещено менять тип упакованного продукта")
+
+
         # 2) грузим новый процесс с его StepDefinition (+ template)
         stmt_process = (
             select(Process)
