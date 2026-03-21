@@ -16,7 +16,7 @@ class PackagingBase(BaseSchema):
     model_config = {"from_attributes": True}
 
 class PackagingCreate(PackagingBase):
-    performed_by: EmployeeRead
+    performed_by_id: int = None
     performed_at: datetime = Field(
         default_factory=lambda: datetime.now(ZoneInfo("Europe/Moscow"))
     )
@@ -31,6 +31,7 @@ class PackagingCreateWithProducts(PackagingCreate):
 
 class PackagingRead(PackagingCreate):
     id: int
+    performed_by: EmployeeRead
     products: List[ProductsFinishedRead]
 
     class Config:
