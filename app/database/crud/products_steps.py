@@ -2,7 +2,6 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
-from sqlalchemy.orm import Mapped
 
 from app.database import ProductStep, StepDefinition, SessionDep
 from app.database.crud.mixines import GetBackNextIdMixin
@@ -18,8 +17,8 @@ class ProductStepRepository(GetBackNextIdMixin[ProductStep]):
 
     async def accept_step(
         self,
-        step_id: Mapped[int],
-        employee_id: Mapped[int],
+        step_id: int,
+        employee_id: int,
     ) -> type[ProductStep] | None:
         step = await self.session.get(self.model, step_id)
         if not step:
@@ -57,7 +56,7 @@ class ProductStepRepository(GetBackNextIdMixin[ProductStep]):
 
     async def change_performer_if_done(
         self,
-        step_id: Mapped[int],
+        step_id: int,
         employee_id: int,
     ) -> type[ProductStep] | None:
         step = await self.session.get(self.model, step_id)

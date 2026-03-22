@@ -3,6 +3,7 @@ from sqlalchemy.orm import selectinload
 
 from app.database import Process, SessionDep, StepDefinition
 from app.database.crud.mixines import GetBackNextIdMixin
+from database.schemas.step_definition import StepDefinitionRead
 
 
 def get_process_repo(session: SessionDep) -> "ProcessRepository":
@@ -51,7 +52,7 @@ class ProcessRepository(GetBackNextIdMixin[Process]):
         await self.session.refresh(new_process)
         return new_process
 
-    async def get_first_step(self, process_id: int) -> StepDefinition | None:
+    async def get_first_step(self, process_id: int) -> StepDefinitionRead | None:
         stmt = (
             select(StepDefinition)
             .where(StepDefinition.process_id == process_id)
@@ -59,4 +60,5 @@ class ProcessRepository(GetBackNextIdMixin[Process]):
             .limit(1)
         )
         res = await self.session.execute(stmt)
-        return res.scalars().first()
+        step = res.scalar_one_or_none()
+        return StepDefinitionRead.model_validate(step) if step else None

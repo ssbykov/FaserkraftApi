@@ -5,6 +5,7 @@ from sqlalchemy.orm import selectinload
 from app.database import Employee, SessionDep
 from app.database.crud.mixines import GetBackNextIdMixin
 from app.database.models import Device, User
+from database.schemas.employee import EmployeeRead
 
 
 def get_employee_repo(session: SessionDep) -> "EmployeeRepository":
@@ -46,7 +47,8 @@ class EmployeeRepository(GetBackNextIdMixin[Employee]):
         await self.session.refresh(employee)
         return employee
 
-    async def get_by_user_id(self, user_id: int) -> Employee | None:
+    async def get_by_user_id(self, user_id: int) -> EmployeeRead | None:
         query = select(self.model).where(self.model.user_id == user_id)
         result = await self.session.execute(query)
-        return result.scalar_one_or_none()
+        employee = result.scalar_one_or_none()
+        return EmployeeRead.model_validate(employee) if employee else None
