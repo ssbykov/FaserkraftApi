@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import List, ClassVar, Type
 
 from app.database import BaseSchema
@@ -28,7 +29,7 @@ class PackagingCreateWithProducts(PackagingBase):
 class PackagingRead(PackagingCreate):
     id: int
     performed_by: EmployeeRead
-    performed_at: str
+    performed_at: datetime
     products: List[ProductsFinishedRead]
 
     class Config:
