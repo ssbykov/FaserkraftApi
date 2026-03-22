@@ -23,7 +23,13 @@ class Employee(BaseWithId):
     user_id: Mapped[int] = mapped_column(
         ForeignKey("users.id"), nullable=True, unique=True
     )
-    user = relationship("User", uselist=False, back_populates=None, viewonly=True)
+    user = relationship(
+        "User",
+        uselist=False,
+        back_populates=None,
+        viewonly=True,
+        lazy="selectin",
+    )
     device_id: Mapped[int] = mapped_column(
         ForeignKey("devices.id"), nullable=True, unique=True
     )
