@@ -44,5 +44,5 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.group.dev.dependencies]
 mypy = "^1.15.0"
-black = "^25.1.0"
+black = "^26.3.1"
 
