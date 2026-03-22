@@ -28,6 +28,7 @@ class PackagingCreateWithProducts(PackagingBase):
 class PackagingRead(PackagingCreate):
     id: int
     performed_by: EmployeeRead
+    performed_at: str
     products: List[ProductsFinishedRead]
 
     class Config:
