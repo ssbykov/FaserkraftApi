@@ -1,5 +1,5 @@
 from .base import BaseWithId, Base
-from .packaging import Packaging
+from .packaging_box import Packaging
 from .user import User
 from .access_token import AccessToken
 from .backup_db import BackupDb

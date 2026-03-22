@@ -6,9 +6,9 @@ from starlette import status
 from app.api.api_v1.fastapi_users import current_user
 from app.core import settings
 from app.database.crud.employees import EmployeeRepository, get_employee_repo
-from app.database.crud.packaging import get_packaging_repo, PackagingRepository
+from app.database.crud.packaging_box import get_packaging_repo, PackagingRepository
 from app.database.models import User, Packaging
-from app.database.schemas.packaging import PackagingRead, PackagingCreate, PackagingCreateWithProducts
+from app.database.schemas.packaging_box import PackagingRead, PackagingCreate, PackagingCreateWithProducts
 
 router = APIRouter(
     tags=["Packaging"],

@@ -8,7 +8,7 @@ from sqlalchemy.orm import joinedload
 from app.database import SessionDep, Product
 from app.database.crud.mixines import GetBackNextIdMixin
 from app.database.models import Packaging
-from app.database.schemas.packaging import PackagingCreate
+from app.database.schemas.packaging_box import PackagingCreate
 
 
 def get_packaging_repo(session: SessionDep) -> "PackagingRepository":

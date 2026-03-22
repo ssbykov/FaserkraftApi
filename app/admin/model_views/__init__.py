@@ -3,7 +3,7 @@ from .daily_plan import DailyPlanAdmin
 from .daily_plan_step import DailyPlanStepAdmin
 from .device import DeviceAdmin
 from .employee import EmployeeAdmin
-from .packaging import PackagingAdmin
+from .packaging_box import PackagingAdmin
 from .process import ProcessAdmin
 from .product import ProductAdmin
 from .product_step import ProductStepAdmin

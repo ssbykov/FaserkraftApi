@@ -1,5 +1,5 @@
 from app.admin.custom_model_view import CustomModelView
-from app.database.crud.packaging import PackagingRepository
+from app.database.crud.packaging_box import PackagingRepository
 from app.database.models import Packaging
 
 

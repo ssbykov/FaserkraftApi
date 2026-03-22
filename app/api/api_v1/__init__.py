@@ -5,7 +5,7 @@ from app.core import settings
 from .auth import router as auth_router
 from .users import router as users_router
 from .products import router as products_router
-from .packaging import router as packaging_router
+from .packaging_boxes import router as packaging_router
 from .processes import router as processes_router
 from .products_steps import router as products_steps_router
 from .day_plans import router as day_plans_router
