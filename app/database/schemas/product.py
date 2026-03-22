@@ -20,6 +20,7 @@ class ProductCreate(ProductBase):
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(ZoneInfo("Europe/Moscow"))
     )
+    packaging_id: int = None
     base_class: ClassVar[Type[Product]] = Product
 
 
