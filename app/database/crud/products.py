@@ -2,7 +2,7 @@ from datetime import date as date_type
 from typing import Optional
 
 from fastapi import HTTPException
-from sqlalchemy import select, func, desc
+from sqlalchemy import select, func, desc, asc
 from sqlalchemy.orm import joinedload, selectinload, aliased
 
 from app.database import (
@@ -340,43 +340,40 @@ class ProductRepository(GetBackNextIdMixin[Product]):
         process_id: int,
         step_definition_id: int,
     ) -> list[Product]:
-        last_step_subq = (
-            select(
-                ProductStep.product_id.label("product_id"),
-                ProductStep.step_definition_id.label("last_step_definition_id"),
-                func.row_number()
-                .over(
-                    partition_by=ProductStep.product_id,
-                    order_by=(
-                        desc(ProductStep.performed_at),
-                        desc(ProductStep.id),
-                    ),
-                )
-                .label("rn"),
-            )
+        last_step_id_subq = (
+            select(ProductStep.id)
+            .join(StepDefinition, StepDefinition.id == ProductStep.step_definition_id)
+            .where(ProductStep.product_id == Product.id)  # корреляция с outer query
             .where(ProductStep.performed_at.is_not(None))
-            .subquery()
+            .order_by(
+                desc(StepDefinition.order),
+                desc(ProductStep.performed_at),
+                desc(ProductStep.id),
+            )
+            .limit(1)
+            .correlate(Product)
+            .scalar_subquery()
         )
 
         stmt = (
-            select(self.model)
-            .join(
-                last_step_subq,
-                last_step_subq.c.product_id == self.model.id,
-            )
+            select(Product)
             .options(
-                joinedload(self.model.work_process),
-                joinedload(self.model.steps)
+                joinedload(Product.work_process),
+                joinedload(Product.steps)
                 .joinedload(ProductStep.step_definition)
                 .joinedload(StepDefinition.template),
-                joinedload(self.model.steps).joinedload(ProductStep.performed_by),
+                joinedload(Product.steps).joinedload(ProductStep.performed_by),
             )
-            .where(self.model.process_id == process_id)
-            .where(self.model.packaging_id.is_(None))
-            .where(self.model.status == ProductStatus.normal)
-            .where(last_step_subq.c.rn == 1)
-            .where(last_step_subq.c.last_step_definition_id == step_definition_id)
-            .order_by(self.model.id)
+            .where(Product.process_id == process_id)
+            .where(Product.packaging_id.is_(None))
+            .where(Product.status == ProductStatus.normal)
+            .where(
+                select(ProductStep.step_definition_id)
+                .where(ProductStep.id == last_step_id_subq)
+                .scalar_subquery()
+                == step_definition_id
+            )
+            .order_by(Product.id)
         )
 
         result = await self.session.scalars(stmt)
