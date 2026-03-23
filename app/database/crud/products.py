@@ -148,7 +148,6 @@ class ProductRepository(GetBackNextIdMixin[Product]):
         if product.packaging_id:
             raise HTTPException(status_code=409, detail="Запрещено менять тип упакованного продукта")
 
-
         # 2) грузим новый процесс с его StepDefinition (+ template)
         stmt_process = (
             select(Process)
@@ -275,7 +274,6 @@ class ProductRepository(GetBackNextIdMixin[Product]):
         rows = result.all()
         return [dict(row._mapping) for row in rows]
 
-
     async def get_finished_products(
             self,
             *,
@@ -334,3 +332,50 @@ class ProductRepository(GetBackNextIdMixin[Product]):
 
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
+
+    async def list_by_process_and_last_completed_step(
+        self,
+        *,
+        process_id: int,
+        step_definition_id: int,
+    ) -> list[Product]:
+        last_step_subq = (
+            select(
+                ProductStep.product_id.label("product_id"),
+                ProductStep.step_definition_id.label("last_step_definition_id"),
+                func.row_number()
+                .over(
+                    partition_by=ProductStep.product_id,
+                    order_by=(
+                        desc(ProductStep.performed_at),
+                        desc(ProductStep.id),
+                    ),
+                )
+                .label("rn"),
+            )
+            .where(ProductStep.performed_at.is_not(None))
+            .subquery()
+        )
+
+        stmt = (
+            select(self.model)
+            .join(
+                last_step_subq,
+                last_step_subq.c.product_id == self.model.id,
+            )
+            .options(
+                joinedload(self.model.work_process),
+                joinedload(self.model.steps)
+                .joinedload(ProductStep.step_definition)
+                .joinedload(StepDefinition.template),
+                joinedload(self.model.steps).joinedload(ProductStep.performed_by),
+            )
+            .where(self.model.process_id == process_id)
+            .where(self.model.status == ProductStatus.normal)
+            .where(last_step_subq.c.rn == 1)
+            .where(last_step_subq.c.last_step_definition_id == step_definition_id)
+            .order_by(self.model.id)
+        )
+
+        result = await self.session.scalars(stmt)
+        return result.unique().all()

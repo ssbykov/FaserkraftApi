@@ -255,3 +255,28 @@ async def _change_product_status_route(
             status_code=500,
             detail="Произошла внутренняя ошибка при изменении статуса продукта",
         )
+
+@router.get(
+    "/by-last-completed-step",
+    response_model=list[ProductRead],
+    status_code=status.HTTP_200_OK,
+)
+async def get_products_by_last_completed_step(
+    process_id: int,
+    step_definition_id: int,
+    repo: Annotated[ProductRepository, Depends(get_product_repo)],
+    user: Annotated[User, Depends(current_user)],
+) -> list[ProductRead]:
+    try:
+        products = await repo.list_by_process_and_last_completed_step(
+            process_id=process_id,
+            step_definition_id=step_definition_id,
+        )
+        return [ProductRead.model_validate(item) for item in products]
+    except HTTPException as exc:
+        raise exc
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Произошла внутренняя ошибка при получении продуктов",
+        )
