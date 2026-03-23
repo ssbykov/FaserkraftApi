@@ -371,6 +371,7 @@ class ProductRepository(GetBackNextIdMixin[Product]):
                 joinedload(self.model.steps).joinedload(ProductStep.performed_by),
             )
             .where(self.model.process_id == process_id)
+            .where(self.model.packaging_id.is_(None))
             .where(self.model.status == ProductStatus.normal)
             .where(last_step_subq.c.rn == 1)
             .where(last_step_subq.c.last_step_definition_id == step_definition_id)
