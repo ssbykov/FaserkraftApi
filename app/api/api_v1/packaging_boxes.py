@@ -70,7 +70,7 @@ async def get_packaging(
         )
 
 @router.get(
-    "",
+    "/",
     response_model=list[PackagingRead],
     status_code=status.HTTP_200_OK,
 )
