@@ -54,7 +54,7 @@ async def create_packaging(
 async def get_packaging(
     serial_number: str,
     repo: Annotated[PackagingRepository, Depends(get_packaging_repo)],
-    user: Annotated[User, Depends(current_user)],
+    # user: Annotated[User, Depends(current_user)],
 ) -> PackagingRead:
     try:
         packaging = await repo.get(serial_number=serial_number)

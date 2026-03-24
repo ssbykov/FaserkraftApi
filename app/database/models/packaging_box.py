@@ -11,6 +11,7 @@ class Packaging(BaseWithId):
 
     performed_by_id = Column(ForeignKey("employees.id"), nullable=True)
     performed_at = Column(DateTime(timezone=True), nullable=True)
+    shipment_by_id = Column(ForeignKey("employees.id"), nullable=True)
     shipment_at = Column(DateTime(timezone=True), nullable=True)
 
     products = relationship(
@@ -25,6 +26,11 @@ class Packaging(BaseWithId):
         lazy="selectin",
     )
 
+    shipment_by = relationship(
+        "Employee",
+        foreign_keys=[shipment_by_id],
+        lazy="selectin",
+    )
 
     def __repr__(self):
         return self.serial_number
