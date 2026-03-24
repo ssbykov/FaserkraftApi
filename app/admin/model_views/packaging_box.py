@@ -17,9 +17,14 @@ class PackagingAdmin(
         "serial_number": "Номер",
         "description": "Описание",
         "products": "Изделия",
+        "performed_by": "Упаковщик",
+        "performed_at": "Дата упаковки",
+        "shipment_at": "Дата отгрузки",
     }
 
     column_list = ("id", "serial_number")
+
+    column_details_exclude_list = ["performed_by_id"]
 
     can_edit = True
     can_delete = True
