@@ -30,6 +30,7 @@ class PackagingRead(PackagingCreate):
     id: int
     performed_by: EmployeeRead
     performed_at: datetime
+    shipment_at: datetime | None
     products: List[ProductsFinishedRead]
 
     class Config:

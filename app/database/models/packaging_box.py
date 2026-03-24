@@ -11,6 +11,7 @@ class Packaging(BaseWithId):
 
     performed_by_id = Column(ForeignKey("employees.id"), nullable=True)
     performed_at = Column(DateTime(timezone=True), nullable=True)
+    shipment_at = Column(DateTime(timezone=True), nullable=True)
 
     products = relationship(
         "Product",
