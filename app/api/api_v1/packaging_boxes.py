@@ -69,6 +69,28 @@ async def get_packaging(
             detail="Произошла внутренняя ошибка при получении упаковки",
         )
 
+@router.get(
+    "",
+    response_model=list[PackagingRead],
+    status_code=status.HTTP_200_OK,
+)
+async def get_all(
+    repo: Annotated[PackagingRepository, Depends(get_packaging_repo)],
+    user: Annotated[User, Depends(current_user)],
+) -> list[PackagingRead]:
+    try:
+        packaging_boxes = await repo.get_all()
+        return [PackagingRead.model_validate(p) for p in packaging_boxes]
+    except HTTPException as exc:
+        # пробрасываем 404 и другие осознанные HTTP-ошибки
+        raise exc
+    except Exception:
+        # внутренняя ошибка без лишних деталей наружу
+        raise HTTPException(
+            status_code=500,
+            detail="Произошла внутренняя ошибка при получении списка упаковок",
+        )
+
 @router.delete(
     "/{serial_number}",
     status_code=status.HTTP_204_NO_CONTENT,
