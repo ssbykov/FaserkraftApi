@@ -68,3 +68,24 @@ async def get_packaging(
             status_code=500,
             detail="Произошла внутренняя ошибка при получении упаковки",
         )
+
+@router.delete(
+    "/{serial_number}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_packaging(
+    serial_number: str,
+    repo: Annotated[PackagingRepository, Depends(get_packaging_repo)],
+    user: Annotated[User, Depends(current_user)],
+) -> None:
+    try:
+        await repo.delete(serial_number=serial_number)
+        return
+    except HTTPException as exc:
+        # пробрасываем 404 и другие осознанные HTTP-ошибки
+        raise exc
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail="Произошла внутренняя ошибка при удалении упаковки",
+        )

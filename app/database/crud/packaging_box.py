@@ -118,3 +118,33 @@ class PackagingRepository(GetBackNextIdMixin[Packaging]):
             status_code=404,
             detail=f"Упаковка с идентификатором {ident} не найдена",
         )
+
+    async def delete(
+        self,
+        *,
+        id: Optional[int] = None,
+        serial_number: Optional[str] = None,
+    ) -> None:
+        if id is None and serial_number is None:
+            raise ValueError("Нужно указать id или serial_number")
+        if id is not None and serial_number is not None:
+            raise ValueError("Укажи только одно из: id или serial_number")
+
+        # сначала проверим, что упаковка существует (как в get)
+        stmt_select = select(self.model)
+        if id is not None:
+            stmt_select = stmt_select.where(self.model.id == id)
+        else:
+            stmt_select = stmt_select.where(self.model.serial_number == serial_number)
+
+        packaging = await self.session.scalar(stmt_select)
+        if packaging is None:
+            ident = id if id is not None else serial_number
+            raise HTTPException(
+                status_code=404,
+                detail=f"Упаковка с идентификатором {ident} не найдена",
+            )
+
+        # удаляем сам объект
+        await self.session.delete(packaging)
+        await self.session.commit()
