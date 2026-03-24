@@ -47,7 +47,7 @@ async def create_packaging(
         )
 
 @router.get(
-    "/{serial_number}",
+    "/by_serial/{serial_number}",
     response_model=PackagingRead,
     status_code=status.HTTP_200_OK,
 )
