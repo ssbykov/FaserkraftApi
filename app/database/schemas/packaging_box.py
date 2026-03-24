@@ -31,7 +31,7 @@ class PackagingRead(PackagingCreate):
     performed_by: EmployeeRead
     performed_at: datetime
     shipment_at: datetime | None
-    shipment_by: EmployeeRead
+    shipment_by: EmployeeRead | None
     products: List[ProductsFinishedRead]
 
     class Config:
