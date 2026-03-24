@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from typing import Optional, List
+from typing import Optional, List, Sequence
 
 from fastapi import HTTPException
 from sqlalchemy import select, update
@@ -100,7 +100,7 @@ class PackagingRepository(GetBackNextIdMixin[Packaging]):
             raise ValueError("Укажи только одно из: id или serial_number")
 
         stmt = select(self.model).options(
-            joinedload(self.model.products),  # если надо подтянуть продукты
+            joinedload(self.model.products),
         )
 
         if id is not None:
@@ -148,3 +148,8 @@ class PackagingRepository(GetBackNextIdMixin[Packaging]):
         # удаляем сам объект
         await self.session.delete(packaging)
         await self.session.commit()
+
+    async def get_all_without_shipment(self) -> Sequence[Packaging]:
+        stmt = self.main_stmt.where(self.model.shipment_at.is_(None))
+        result = await self.session.execute(stmt)
+        return result.scalars().all()

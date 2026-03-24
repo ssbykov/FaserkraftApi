@@ -70,16 +70,16 @@ async def get_packaging(
         )
 
 @router.get(
-    "/",
+    "/get_all_in_storage",
     response_model=list[PackagingRead],
     status_code=status.HTTP_200_OK,
 )
-async def get_all(
+async def get_all_in_storage(
     repo: Annotated[PackagingRepository, Depends(get_packaging_repo)],
-    user: Annotated[User, Depends(current_user)],
+    # user: Annotated[User, Depends(current_user)],
 ) -> list[PackagingRead]:
     try:
-        packaging_boxes = await repo.get_all()
+        packaging_boxes = await repo.get_all_without_shipment()
         return [PackagingRead.model_validate(p) for p in packaging_boxes]
     except HTTPException as exc:
         # пробрасываем 404 и другие осознанные HTTP-ошибки
