@@ -153,3 +153,20 @@ class PackagingRepository(GetBackNextIdMixin[Packaging]):
         stmt = self.main_stmt.where(self.model.shipment_at.is_(None))
         result = await self.session.execute(stmt)
         return result.scalars().all()
+
+    async def set_shipment_for_packaging(
+        self,
+        packaging_ids: list[int],
+        shipment_by_id: int,
+        shipment_at: datetime,
+    ) -> None:
+        stmt = (
+            update(Packaging)
+            .where(Packaging.id.in_(packaging_ids))
+            .values(
+                shipment_by_id=shipment_by_id,
+                shipment_at=shipment_at,
+            )
+        )
+        await self.session.execute(stmt)
+        await self.session.commit()
