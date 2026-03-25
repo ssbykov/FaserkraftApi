@@ -30,6 +30,7 @@ class ProductRead(ProductBase):
     created_at: datetime
     status: ProductStatus
     steps: Optional[List["ProductStepRead"]]
+    packaging_id: int = None
 
     model_config = {
         "from_attributes": True,
