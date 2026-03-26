@@ -1,8 +1,8 @@
-from datetime import date as date_type
+from datetime import date as date_type, timedelta
 from typing import Optional
 
 from fastapi import HTTPException
-from sqlalchemy import select, func, desc, asc
+from sqlalchemy import select, func, desc
 from sqlalchemy.orm import joinedload, selectinload, aliased
 
 from app.database import (
@@ -11,7 +11,8 @@ from app.database import (
     SessionDep,
     StepDefinition,
     Process,
-    StepTemplate, DailyPlan,
+    StepTemplate,
+    DailyPlan,
 )
 from app.database.crud.mixines import GetBackNextIdMixin
 from app.database.models import DailyPlanStep
@@ -146,7 +147,9 @@ class ProductRepository(GetBackNextIdMixin[Product]):
             raise ValueError("Продукт не найден")
 
         if product.packaging_id:
-            raise HTTPException(status_code=409, detail="Запрещено менять тип упакованного продукта")
+            raise HTTPException(
+                status_code=409, detail="Запрещено менять тип упакованного продукта"
+            )
 
         # 2) грузим новый процесс с его StepDefinition (+ template)
         stmt_process = (
@@ -278,9 +281,9 @@ class ProductRepository(GetBackNextIdMixin[Product]):
         return [dict(row._mapping) for row in rows]
 
     async def get_finished_products(
-            self,
-            *,
-            employee_id: int | None = None,
+        self,
+        *,
+        employee_id: int | None = None,
     ) -> list[Product]:
         today = date_type.today()
 
@@ -289,7 +292,7 @@ class ProductRepository(GetBackNextIdMixin[Product]):
             .where(
                 ProductStep.product_id == Product.id,
                 ProductStep.status != StepStatus.done,
-                )
+            )
             .exists()
         )
 
@@ -298,17 +301,19 @@ class ProductRepository(GetBackNextIdMixin[Product]):
             Product.status == ProductStatus.normal,
             Product.packaging_id.is_(None),
             ~not_done_exists,
-            ]
+        ]
 
         if employee_id is not None:
             # последний выполненный шаг продукта (по порядку StepDefinition.order)
             last_step_step_def_id_subq = (
                 select(ProductStep.step_definition_id)
-                .join(StepDefinition, StepDefinition.id == ProductStep.step_definition_id)
+                .join(
+                    StepDefinition, StepDefinition.id == ProductStep.step_definition_id
+                )
                 .where(
                     ProductStep.product_id == Product.id,
                     ProductStep.status == StepStatus.done,
-                    )
+                )
                 .order_by(StepDefinition.order.desc())
                 .limit(1)
                 .scalar_subquery()
@@ -321,7 +326,7 @@ class ProductRepository(GetBackNextIdMixin[Product]):
                 .where(
                     DailyPlan.date == today,
                     DailyPlan.employee_id == employee_id,
-                    )
+                )
             )
 
             # пересечение: последний шаг продукта должен быть в плане
@@ -375,6 +380,48 @@ class ProductRepository(GetBackNextIdMixin[Product]):
                 .scalar_subquery()
                 == step_definition_id
             )
+            .order_by(Product.id)
+        )
+
+        result = await self.session.scalars(stmt)
+        return result.unique().all()
+
+    async def list_by_step_employee_and_day(
+        self,
+        *,
+        step_definition_id: int,
+        employee_id: int,
+        day: date_type,
+    ) -> list[Product]:
+        """
+        Продукты, у которых ЕСТЬ этап с указанным step_definition_id,
+        выполненный заданным сотрудником в указанную дату.
+        """
+        has_step_subq = (
+            select(ProductStep.id)
+            .where(
+                ProductStep.product_id == Product.id,
+                ProductStep.step_definition_id == step_definition_id,
+                ProductStep.performed_by_id == employee_id,
+                ProductStep.status == StepStatus.done,
+                ProductStep.performed_at >= day,
+                ProductStep.performed_at < day + timedelta(days=1),
+            )
+            .exists()
+        )
+
+        stmt = (
+            select(Product)
+            .options(
+                joinedload(Product.work_process),
+                joinedload(Product.steps)
+                .joinedload(ProductStep.step_definition)
+                .joinedload(StepDefinition.template),
+                joinedload(Product.steps).joinedload(ProductStep.performed_by),
+            )
+            .where(Product.status == ProductStatus.normal)
+            .where(Product.packaging_id.is_(None))
+            .where(has_step_subq)
             .order_by(Product.id)
         )
 

@@ -19,7 +19,8 @@ from app.database.models.product import ProductStatus
 from app.database.schemas.product import (
     ProductRead,
     ProductCreate,
-    ProductsCountByLastStepRead, ProductsFinishedRead,
+    ProductsCountByLastStepRead,
+    ProductsFinishedRead,
 )
 
 router = APIRouter(
@@ -27,10 +28,8 @@ router = APIRouter(
     prefix=settings.api.v1.products,
 )
 
-@router.post("",
-             response_model=ProductRead,
-             status_code=status.HTTP_201_CREATED
-             )
+
+@router.post("", response_model=ProductRead, status_code=status.HTTP_201_CREATED)
 async def create_product(
     product_in: ProductCreate,
     repo: Annotated[ProductRepository, Depends(get_product_repo)],
@@ -151,6 +150,7 @@ async def get_products_stats_by_last_done_step(
             detail="Произошла внутренняя ошибка при получении статистики по продуктам",
         )
 
+
 @router.get(
     "/finished",
     response_model=list[ProductsFinishedRead],
@@ -166,7 +166,7 @@ async def get_finished_products(
         employee_id = None
         if employee.role not in [Role.admin, Role.master]:
             employee_id = employee.id
-        products = await repo.get_finished_products(employee_id = employee_id)
+        products = await repo.get_finished_products(employee_id=employee_id)
         return [ProductsFinishedRead.model_validate(p) for p in products]
     except HTTPException as exc:
         raise exc
@@ -174,6 +174,49 @@ async def get_finished_products(
         raise HTTPException(
             status_code=500,
             detail="Произошла внутренняя ошибка при получении списка завершённых продуктов",
+        )
+
+
+from datetime import date as date_type
+
+
+@router.get(
+    "/by-step-employee-day",
+    response_model=list[ProductRead],
+    status_code=status.HTTP_200_OK,
+)
+async def get_products_by_step_employee_day(
+    step_definition_id: int,
+    day: date_type,
+    repo: Annotated[ProductRepository, Depends(get_product_repo)],
+    employee_repo: Annotated[EmployeeRepository, Depends(get_employee_repo)],
+    user: Annotated[User, Depends(current_user)],
+    employee_id: int | None = None,
+) -> list[ProductRead]:
+    try:
+        employee = await employee_repo.get_by_user_id(user.id)
+
+        # если не админ/мастер — всегда берём только себя
+        if employee.role not in [Role.admin, Role.master]:
+            effective_employee_id = employee.id
+        else:
+            # админ/мастер может явно указать employee_id,
+            # иначе по умолчанию смотрит свои продукты
+            effective_employee_id = employee_id or employee.id
+
+        products = await repo.list_by_step_employee_and_day(
+            step_definition_id=step_definition_id,
+            employee_id=effective_employee_id,
+            day=day,
+        )
+        return [ProductRead.model_validate(p) for p in products]
+
+    except HTTPException as exc:
+        raise exc
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail="Произошла внутренняя ошибка при получении продуктов по этапу/сотруднику/дате",
         )
 
 
@@ -255,6 +298,7 @@ async def _change_product_status_route(
             status_code=500,
             detail="Произошла внутренняя ошибка при изменении статуса продукта",
         )
+
 
 @router.get(
     "/by-last-completed-step",
