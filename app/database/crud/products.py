@@ -269,6 +269,7 @@ class ProductRepository(GetBackNextIdMixin[Product]):
                 Process.name,
                 subq.c.step_definition_id,
                 StepTemplate.name,
+                StepTemplate.name_genitive,
             )
         )
 
