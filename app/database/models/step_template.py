@@ -8,6 +8,7 @@ class StepTemplate(BaseWithId):
     __tablename__ = "step_templates"
 
     name = Column(String, unique=True, nullable=False)
+    name_genitive = Column(String, unique=False, nullable=False)
     description = Column(Text, nullable=True)
 
     definitions = relationship("StepDefinition", back_populates="template")

@@ -14,15 +14,17 @@ class StepTemplateAdmin(
 
     column_list = ("name", "description")
 
-    column_details_list = ("name", "description")
+    column_details_list = ("name", "name_genitive", "description")
 
     column_labels = {
         "name": "Название",
+        "name_genitive": "Название в родительном",
         "description": "Описание",
     }
 
     form_create_rules = [
         "name",
+        "name_genitive",
         "description",
     ]
     form_edit_rules = form_create_rules.copy()
