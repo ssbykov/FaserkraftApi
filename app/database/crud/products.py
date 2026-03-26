@@ -251,7 +251,8 @@ class ProductRepository(GetBackNextIdMixin[Product]):
                     "process_name"
                 ),  # предполагается поле name у Process
                 subq.c.step_definition_id,
-                StepTemplate.name.label("step_name"),  # берем имя из StepTemplate
+                StepTemplate.name.label("step_name"),
+                StepTemplate.name_genitive.label("step_name_genitive"),
                 func.count(Product.id).label("count"),
             )
             .join(subq, subq.c.product_id == Product.id)

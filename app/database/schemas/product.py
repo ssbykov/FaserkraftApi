@@ -54,6 +54,7 @@ class ProductsCountByLastStepRead(BaseSchema):
     process_name: str
     step_definition_id: int
     step_name: str
+    step_name_genitive: str
     count: int
 
     class Config:
