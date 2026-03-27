@@ -420,7 +420,6 @@ class ProductRepository(GetBackNextIdMixin[Product]):
                 joinedload(Product.steps).joinedload(ProductStep.performed_by),
             )
             .where(Product.status == ProductStatus.normal)
-            .where(Product.packaging_id.is_(None))
             .where(has_step_subq)
             .order_by(Product.id)
         )
