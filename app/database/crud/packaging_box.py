@@ -154,6 +154,11 @@ class PackagingRepository(GetBackNextIdMixin[Packaging]):
         result = await self.session.execute(stmt)
         return result.scalars().all()
 
+    async def get_all_with_shipment(self) -> Sequence[Packaging]:
+        stmt = self.main_stmt.where(self.model.shipment_at.isnot(None))
+        result = await self.session.execute(stmt)
+        return result.scalars().all()
+
     async def set_shipment_for_packaging(
         self,
         packaging_ids: list[int],
