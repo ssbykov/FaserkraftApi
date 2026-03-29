@@ -188,3 +188,53 @@ class DailyPlanRepository(GetBackNextIdMixin[DailyPlan]):
             await self.session.delete(daily_plan_step)
 
         return await self._handle_operation(operation, date)
+
+    async def copy_daily_plans_from_date(
+        self,
+        *,
+        from_date: date_type,
+        to_date: date_type | None = None,
+    ) -> Sequence[DailyPlan]:
+        to_date = to_date or date_type.today()
+
+        if from_date == to_date:
+            return await self.get(date=to_date)
+
+        async def operation():
+            source_stmt = (
+                select(self.model)
+                .options(joinedload(self.model.steps))
+                .where(self.model.date == from_date)
+            )
+            source_result = await self.session.execute(source_stmt)
+            source_plans = source_result.unique().scalars().all()
+
+            target_stmt = select(self.model).where(self.model.date == to_date)
+            target_result = await self.session.execute(target_stmt)
+            target_plans = target_result.scalars().all()
+
+            for target_plan in target_plans:
+                steps_stmt = select(DailyPlanStep).where(
+                    DailyPlanStep.daily_plan_id == target_plan.id
+                )
+                steps_result = await self.session.execute(steps_stmt)
+                target_steps = steps_result.scalars().all()
+
+                for step in target_steps:
+                    await self.session.delete(step)
+
+            for source_plan in source_plans:
+                target_plan = await self._get_or_create_daily_plan(
+                    to_date, source_plan.employee_id
+                )
+
+                for source_step in source_plan.steps:
+                    self.session.add(
+                        DailyPlanStep(
+                            daily_plan_id=target_plan.id,
+                            step_definition_id=source_step.step_definition_id,
+                            planned_quantity=source_step.planned_quantity,
+                        )
+                    )
+
+        return await self._handle_operation(operation, to_date)

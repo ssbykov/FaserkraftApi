@@ -1,6 +1,8 @@
 from datetime import date
 from typing import ClassVar, List, Optional, Type
 
+from pydantic import BaseModel
+
 from app.database import DailyPlan, BaseSchema
 from app.database.schemas.daily_plan_step import DailyPlanStepRead
 from app.database.schemas.employee import EmployeeRead
@@ -21,3 +23,7 @@ class DailyPlanRead(DailyPlanBase):
     steps: Optional[List["DailyPlanStepRead"]]
 
     model_config = {"from_attributes": True}
+
+class DailyPlanCopyRequest(BaseModel):
+    from_date: date
+    to_date: date | None = None

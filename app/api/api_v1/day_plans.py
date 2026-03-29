@@ -8,7 +8,7 @@ from app.database.crud.daily_plans import DailyPlanRepository, get_daily_plan_re
 from app.database.crud.employees import EmployeeRepository, get_employee_repo
 from app.database.models import User
 from app.database.models.employee import Role
-from app.database.schemas.daily_plan import DailyPlanRead
+from app.database.schemas.daily_plan import DailyPlanRead, DailyPlanCopyRequest
 from app.database.schemas.daily_plan_step import (
     DailyPlanStepCreate,
     DailyPlanStepUpdate,
@@ -177,4 +177,39 @@ async def remove_step_from_daily_plan(
         raise HTTPException(
             status_code=500,
             detail="Произошла внутренняя ошибка при удалении этапа из плана",
+        )
+
+@router.post(
+    "/copy",
+    response_model=list[DailyPlanRead],
+    status_code=status.HTTP_200_OK,
+)
+async def copy_daily_plans(
+    payload: DailyPlanCopyRequest,
+    repo: Annotated[DailyPlanRepository, Depends(get_daily_plan_repo)],
+    employee_repo: Annotated[EmployeeRepository, Depends(get_employee_repo)],
+    user: Annotated[User, Depends(current_user)],
+) -> list[DailyPlanRead]:
+    try:
+        employee = await employee_repo.get_by_user_id(user.id)
+
+        if employee.role not in [Role.admin, Role.master]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Нет прав доступа к этому ресурсу",
+            )
+
+        daily_plans = await repo.copy_daily_plans_from_date(
+            from_date=payload.from_date,
+            to_date=payload.to_date,
+        )
+
+        return [DailyPlanRead.model_validate(dp) for dp in daily_plans]
+
+    except HTTPException as exc:
+        raise exc
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail="Произошла внутренняя ошибка при копировании планов на день",
         )
