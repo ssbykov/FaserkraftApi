@@ -39,7 +39,7 @@ class AdminAuth(AuthenticationBackend):
 
             if not (
                 user := await self.user_manager_helper.get_user(credentials=credentials)
-            ) and not user.is_superuser:
+            ) or not user.is_superuser:
                 return AdminAuthResponse(
                     is_ok=False,
                     error="неверный логин/пароль или пользователь не подтвержден.,",
