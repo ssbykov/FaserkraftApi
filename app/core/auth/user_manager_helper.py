@@ -72,7 +72,7 @@ class UserManagerHelper:
         credentials: OAuth2PasswordRequestForm,
     ) -> User | None:
         user = await user_manager.authenticate(credentials)
-        if user and user.is_active and user.is_verified:
+        if user and user.is_active and user.is_verified and user.is_superuser:
             return user
         return None
 
