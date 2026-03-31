@@ -46,7 +46,9 @@ class ProductStep(BaseWithId):
 
     product = relationship("Product", back_populates="steps")
     step_definition = relationship(
-        "StepDefinition", back_populates="product_steps", lazy="selectin"
+        "StepDefinition",
+        back_populates="product_steps",
+        lazy="selectin",
     )
 
     accepted_by = relationship(
@@ -58,6 +60,7 @@ class ProductStep(BaseWithId):
         "Employee",
         foreign_keys=[performed_by_id],
         back_populates="product_steps_performed",
+        lazy="selectin",
     )
 
     def __repr__(self):
