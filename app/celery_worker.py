@@ -1,18 +1,10 @@
 from dataclasses import dataclass
 from typing import Callable, Any
 
-import redis
 from celery import Celery, Task  # type: ignore
 from celery.result import AsyncResult  # type: ignore
 
-from app.core import settings
-
-HOST = settings.db.redis_host
-PORT = 6379
-DB = settings.db.redis_db
-
-redis_client = redis.Redis(host=HOST, port=PORT, db=DB)
-REDIS_PATH = f"redis://{HOST}:{PORT}/{DB}"
+from core.redis import REDIS_PATH, redis_client
 
 celery_app = Celery("fkapi", broker=REDIS_PATH, backend=REDIS_PATH)
 

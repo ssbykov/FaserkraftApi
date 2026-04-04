@@ -10,8 +10,9 @@ from app.database import db_helper
 from app.database.backup_db import restore_database_from_dump
 from app.database.crud.backup_db import BackupDbRepository
 from app.database.models.backup_db import BackupDb
-from app.celery_worker import redis_client, check_job_status
+from app.celery_worker import check_job_status
 from app.tasks.create_backup import run_process_backup, backup_task
+from core.redis import redis_client
 
 
 class BackupDbAdmin(
