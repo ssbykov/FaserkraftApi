@@ -1,6 +1,6 @@
 import redis
 
-from core import settings
+from app.core import settings
 
 HOST = settings.db.redis_host
 PORT = 6379
