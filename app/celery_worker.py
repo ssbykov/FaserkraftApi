@@ -4,7 +4,7 @@ from typing import Callable, Any
 from celery import Celery, Task  # type: ignore
 from celery.result import AsyncResult  # type: ignore
 
-from core.redis import REDIS_PATH, redis_client
+from app.core.redis import REDIS_PATH, redis_client
 
 celery_app = Celery("fkapi", broker=REDIS_PATH, backend=REDIS_PATH)
 
