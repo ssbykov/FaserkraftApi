@@ -10,7 +10,7 @@ from app.core import settings
 from app.database import db_helper
 from app.database.crud.yandex_tokens import YandexTokensRepository
 from app.database.yandex_disk import create_yadisk_instance
-from core.redis import redis_client
+from app.core.redis import redis_client
 
 if TYPE_CHECKING:
     from app.core.config import DbSettings
