@@ -67,7 +67,7 @@ class BackupDbAdmin(
 
         # Если нет задачи или задача завершилась успешно — запускаем новый бэкап
         if not task or task.status == "SUCCESS":
-            new_task = run_process_backup.delay()
+            new_task = run_process_backup.delay(backup_task.name)
             redis_client.set(run_process_backup.name, new_task.id)
             return None
 

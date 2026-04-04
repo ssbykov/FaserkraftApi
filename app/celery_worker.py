@@ -16,6 +16,8 @@ REDIS_PATH = f"redis://{HOST}:{PORT}/{DB}"
 
 celery_app = Celery("fkapi", broker=REDIS_PATH, backend=REDIS_PATH)
 
+celery_app.conf.result_expires = 3600
+
 celery_app.autodiscover_tasks(["app.tasks"])
 
 

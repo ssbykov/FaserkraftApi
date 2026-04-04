@@ -7,8 +7,8 @@ backup_task = CeleryTask("tasks.backup", create_backup)
 
 
 @celery_app.task(name=backup_task.name)  # type: ignore
-def run_process_backup(*args: Any) -> Any:
+def run_process_backup(task_name: str) -> Any:
     import asyncio
 
     loop = asyncio.get_event_loop()
-    return loop.run_until_complete(backup_task.func(*args))
+    return loop.run_until_complete(backup_task.func(task_name))

@@ -10,6 +10,7 @@ from app.core import settings
 from app.database import db_helper
 from app.database.crud.yandex_tokens import YandexTokensRepository
 from app.database.yandex_disk import create_yadisk_instance
+from celery_worker import redis_client
 
 if TYPE_CHECKING:
     from app.core.config import DbSettings
@@ -204,7 +205,7 @@ async def restore_database_from_dump(dump_file: str) -> None:
         remove_pgpass_file(pgpass_path)
 
 
-async def create_backup() -> str | None:
+async def create_backup(task_name: str) -> str | None:
     logging.info("=" * 50)
     logging.info("Запуск процесса создания бэкапа")
 
@@ -236,6 +237,7 @@ async def create_backup() -> str | None:
         logging.exception("Полный стек ошибки:")  # Добавляет traceback
         return None
 
+    redis_client.delete(task_name)
     logging.info(f"Процесс создания бэкапа завершен. Результат: {dump_file}")
     logging.info("=" * 50)
     return dump_file
