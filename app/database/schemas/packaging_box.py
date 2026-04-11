@@ -33,6 +33,7 @@ class PackagingRead(PackagingCreate):
     shipment_at: datetime | None
     shipment_by: EmployeeRead | None
     products: List[ProductsFinishedRead]
+    order_id: int | None
 
     class Config:
         from_attributes = True

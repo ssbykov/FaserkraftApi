@@ -32,9 +32,9 @@ from .model_views import (
     DailyPlanAdmin,
     DailyPlanStepAdmin,
     PackagingAdmin,
+    OrderAdmin,
 )
 from .model_views.size_type import SizeTypeAdmin
-from .save_result import SaveResult
 
 
 async def init_admin(app: Any) -> "NewAdmin":
@@ -51,6 +51,7 @@ async def init_admin(app: Any) -> "NewAdmin":
     admin.add_view(StepTemplateAdmin)
     admin.add_view(ProductAdmin)
     admin.add_view(PackagingAdmin)
+    admin.add_view(OrderAdmin)
     admin.add_view(BackupDbAdmin)
     admin.add_view(UserAdmin)
     admin.add_view(EmployeeAdmin)

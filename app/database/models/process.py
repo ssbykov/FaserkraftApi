@@ -31,5 +31,11 @@ class Process(BaseWithId):
         lazy="selectin",
     )
 
+    order_items = relationship(
+        "OrderItem",
+        back_populates="work_process",
+        lazy="selectin",
+    )
+
     def __repr__(self):
         return self.name

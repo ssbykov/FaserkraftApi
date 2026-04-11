@@ -11,6 +11,7 @@ from .size_type import SizeType
 from .step_definition import StepDefinitionAdmin
 from .step_template import StepTemplateAdmin
 from .user import UserAdmin
+from .order import OrderAdmin
 
 __all__ = [
     "BackupDbAdmin",
@@ -26,4 +27,5 @@ __all__ = [
     "DailyPlanAdmin",
     "DailyPlanStepAdmin",
     "SizeType",
+    "OrderAdmin",
 ]

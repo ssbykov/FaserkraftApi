@@ -21,11 +21,12 @@ class PackagingAdmin(
         "performed_at": "Дата упаковки",
         "shipment_at": "Дата отгрузки",
         "shipment_by": "Отгрузил",
+        "order": "Заказ",
     }
 
     column_list = ("id", "serial_number")
 
-    column_details_exclude_list = ["performed_by_id", "shipment_by_id"]
+    column_details_exclude_list = ["performed_by_id", "shipment_by_id", "order_id"]
 
     can_edit = True
     can_delete = True
