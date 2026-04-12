@@ -4,17 +4,16 @@ from typing import Annotated, List
 from fastapi import APIRouter, HTTPException, Depends
 from starlette import status
 
-from app.api.api_v1.fastapi_users import current_user
+from app.api.api_v1.dependencies import get_current_employee, require_admin_or_master
 from app.core import settings
-from app.database.crud.employees import EmployeeRepository, get_employee_repo
 from app.database.crud.packaging_box import get_packaging_repo, PackagingRepository
-from app.database.models import User, Packaging
+from app.database.models import Packaging
+from app.database.schemas.employee import EmployeeRead
 from app.database.schemas.packaging_box import (
     PackagingRead,
     PackagingCreate,
     PackagingCreateWithProducts,
 )
-from database.models.employee import Role
 
 router = APIRouter(
     tags=["Packaging"],
@@ -30,12 +29,9 @@ router = APIRouter(
 async def create_packaging(
     data: PackagingCreateWithProducts,
     repo: Annotated[PackagingRepository, Depends(get_packaging_repo)],
-    employee_repo: Annotated[EmployeeRepository, Depends(get_employee_repo)],
-    user: Annotated[User, Depends(current_user)],
+    employee: Annotated[EmployeeRead, Depends(get_current_employee)],
 ) -> Packaging:
     try:
-        employee = await employee_repo.get_by_user_id(user.id)
-
         packaging = PackagingCreate(
             serial_number=data.serial_number,
             performed_by_id=employee.id,
@@ -61,16 +57,14 @@ async def create_packaging(
 async def get_packaging(
     serial_number: str,
     repo: Annotated[PackagingRepository, Depends(get_packaging_repo)],
-    user: Annotated[User, Depends(current_user)],
+    employee: Annotated[EmployeeRead, Depends(get_current_employee)],
 ) -> PackagingRead:
     try:
         packaging = await repo.get(serial_number=serial_number)
         return PackagingRead.model_validate(packaging)
     except HTTPException as exc:
-        # пробрасываем 404 и другие осознанные HTTP-ошибки
         raise exc
     except Exception:
-        # внутренняя ошибка без лишних деталей наружу
         raise HTTPException(
             status_code=500,
             detail="Произошла внутренняя ошибка при получении упаковки",
@@ -84,18 +78,9 @@ async def get_packaging(
 async def set_packaging_shipment(
     packaging_ids: List[int],
     repo: Annotated[PackagingRepository, Depends(get_packaging_repo)],
-    employee_repo: Annotated[EmployeeRepository, Depends(get_employee_repo)],
-    user: Annotated[User, Depends(current_user)],
+    employee: Annotated[EmployeeRead, Depends(require_admin_or_master)],
 ):
     try:
-        employee = await employee_repo.get_by_user_id(user.id)
-
-        if employee.role not in [Role.admin, Role.master]:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Данная операция недоступна",
-            )
-
         await repo.set_shipment_for_packaging(
             packaging_ids=packaging_ids,
             shipment_by_id=employee.id,
@@ -119,20 +104,19 @@ async def set_packaging_shipment(
 )
 async def get_all_in_storage(
     repo: Annotated[PackagingRepository, Depends(get_packaging_repo)],
-    user: Annotated[User, Depends(current_user)],
+    employee: Annotated[EmployeeRead, Depends(get_current_employee)],
 ) -> list[PackagingRead]:
     try:
         packaging_boxes = await repo.get_all_without_shipment()
         return [PackagingRead.model_validate(p) for p in packaging_boxes]
     except HTTPException as exc:
-        # пробрасываем 404 и другие осознанные HTTP-ошибки
         raise exc
     except Exception:
-        # внутренняя ошибка без лишних деталей наружу
         raise HTTPException(
             status_code=500,
             detail="Произошла внутренняя ошибка при получении списка упаковок",
         )
+
 
 @router.get(
     "/get_all_shipped",
@@ -141,20 +125,19 @@ async def get_all_in_storage(
 )
 async def get_all_shipped(
     repo: Annotated[PackagingRepository, Depends(get_packaging_repo)],
-    user: Annotated[User, Depends(current_user)],
+    employee: Annotated[EmployeeRead, Depends(get_current_employee)],
 ) -> list[PackagingRead]:
     try:
         packaging_boxes = await repo.get_all_with_shipment()
         return [PackagingRead.model_validate(p) for p in packaging_boxes]
     except HTTPException as exc:
-        # пробрасываем 404 и другие осознанные HTTP-ошибки
         raise exc
     except Exception:
-        # внутренняя ошибка без лишних деталей наружу
         raise HTTPException(
             status_code=500,
             detail="Произошла внутренняя ошибка при получении списка упаковок",
         )
+
 
 @router.delete(
     "/{serial_number}",
@@ -163,13 +146,12 @@ async def get_all_shipped(
 async def delete_packaging(
     serial_number: str,
     repo: Annotated[PackagingRepository, Depends(get_packaging_repo)],
-    user: Annotated[User, Depends(current_user)],
+    employee: Annotated[EmployeeRead, Depends(get_current_employee)],
 ) -> None:
     try:
         await repo.delete(serial_number=serial_number)
         return
     except HTTPException as exc:
-        # пробрасываем 404 и другие осознанные HTTP-ошибки
         raise exc
     except Exception:
         raise HTTPException(
