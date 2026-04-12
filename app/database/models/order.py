@@ -10,6 +10,8 @@ class Order(BaseWithId):
     contract_number = Column(String, nullable=False)
     contract_date = Column(Date, nullable=False)
     planned_shipment_date = Column(Date, nullable=True)
+    shipment_date = Column(Date, nullable=True)
+    shipment_by_id = Column(ForeignKey("employees.id"), nullable=True)
 
     items = relationship(
         "OrderItem",
@@ -22,6 +24,12 @@ class Order(BaseWithId):
     packaging = relationship(
         "Packaging",
         back_populates="order",
+        lazy="selectin",
+    )
+
+    shipment_by = relationship(
+        "Employee",
+        foreign_keys=[shipment_by_id],
         lazy="selectin",
     )
 
