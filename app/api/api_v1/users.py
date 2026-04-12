@@ -8,20 +8,19 @@ from sqlalchemy.exc import IntegrityError
 from starlette import status
 from starlette.requests import Request
 
-from app.api.api_v1.fastapi_users import fastapi_users, current_user
+from app.api.api_v1.dependencies import require_admin_or_master
+from app.api.api_v1.fastapi_users import fastapi_users
 from app.core import settings
 from app.core.auth.user_manager_helper import get_user_manager_helper, UserManagerHelper
-from app.database import Employee
 from app.database.crud.devices import DeviceRepository, get_device_repo
 from app.database.crud.employees import EmployeeRepository, get_employee_repo
-from app.database.models import User
-from app.database.models.employee import Role
 from app.database.schemas.device import (
     DeviceRead,
     DeviceCreate,
     DeviceRegister,
     DeviceResponse,
 )
+from app.database.schemas.employee import EmployeeRead
 from app.database.schemas.qr_data import QRData
 from app.database.schemas.user import UserUpdate, UserRead
 
@@ -69,40 +68,19 @@ async def register_device(
                 headers={"WWW-Authenticate": "Bearer"},
             ) from exc
 
-    # 3. Регистрация устройства и привязка к сотруднику
-    employee = await register_device_logic(device_in, device_repo, employee_repo)
 
-    # 4. Формируем ответ
-    return DeviceResponse(
-        user_email=employee.user.email,
-        employee_name=employee.name,
-        employee_role=employee.role.name,
-        device_id=device_in.device_id,
-        model=device_in.model,
-        manufacturer=device_in.manufacturer,
-    )
-
-
-async def register_device_logic(
-    device_in: DeviceRegister,
-    device_repo: DeviceRepository,
-    employee_repo: EmployeeRepository,
-) -> Employee:
     try:
         new_device = DeviceCreate(**device_in.model_dump())
 
-        # 1) создаём устройство
         try:
             device = await device_repo.create_device(new_device)
         except IntegrityError as exc:
-            # предполагаем, что сработало уникальное ограничение по device_id
             logging.exception("IntegrityError on create_device: %s", exc)
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Устройство с таким ID уже зарегистрировано",
             ) from exc
 
-        # 2) проверяем, что репозиторий вернул корректное устройство
         try:
             DeviceRead.model_validate(device)
         except ValidationError as exc:
@@ -112,22 +90,27 @@ async def register_device_logic(
                 detail="Данные устройства в хранилище не соответствуют схеме",
             ) from exc
 
-        # 3) привязываем устройство к сотруднику
         employee = await employee_repo.attach_device(device_in.user_id, device)
         if employee is None:
-            # репозиторий просто вернул None, без исключений
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Сотрудник не найден",
             )
 
-        return employee
+        # 4. Формируем ответ
+        return DeviceResponse(
+            user_email=employee.user.email,
+            employee_name=employee.name,
+            employee_role=employee.role.name,
+            device_id=device_in.device_id,
+            model=device_in.model,
+            manufacturer=device_in.manufacturer,
+        )
 
     except HTTPException:
-        # уже сформированный ответ
         raise
     except Exception as exc:
-        logging.exception("Error in register_device_logic: %s", exc)
+        logging.exception("Error in register_device: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Внутренняя ошибка при регистрации устройства",
@@ -144,16 +127,9 @@ async def get_qr_code_for_employee(
     request: Request,
     employee_repo: Annotated[EmployeeRepository, Depends(get_employee_repo)],
     user_manager: Annotated[UserManagerHelper, Depends(get_user_manager_helper)],
-    user: Annotated[User, Depends(current_user)],
+    employee: Annotated[EmployeeRead, Depends(require_admin_or_master)],
 ) -> QRData:
     try:
-        employee = await employee_repo.get_by_user_id(user.id)
-        if employee.role not in [Role.admin, Role.master]:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Нет прав доступа к этому ресурсу",
-            )
-
         target_employee = await employee_repo.get_by_id(employee_id)
         if not target_employee:
             raise HTTPException(
