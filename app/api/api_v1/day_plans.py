@@ -3,7 +3,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from api.api_v1.employees import get_current_employee, require_admin_or_master
+from app.api.api_v1.dependencies import get_current_employee, require_admin_or_master
 from app.database.crud.daily_plans import DailyPlanRepository, get_daily_plan_repo
 from app.database.models.employee import Role, Employee
 from app.database.schemas.daily_plan import DailyPlanRead, DailyPlanCopyRequest
