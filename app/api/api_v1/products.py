@@ -1,21 +1,19 @@
 from datetime import date
-from functools import partial
-from typing import Annotated, Callable, Awaitable
+from datetime import date as date_type
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.exc import IntegrityError
 from starlette import status
 
-from app.api.api_v1.fastapi_users import current_user
+from app.api.api_v1.dependencies import get_current_employee, require_admin_or_master
 from app.core import settings
-from app.database import Product
 from app.database.crud.daily_plans import DailyPlanRepository, get_daily_plan_repo
-from app.database.crud.employees import EmployeeRepository, get_employee_repo
 from app.database.crud.processes import ProcessRepository, get_process_repo
 from app.database.crud.products import ProductRepository, get_product_repo
-from app.database.models import User
 from app.database.models.employee import Role
 from app.database.models.product import ProductStatus
+from app.database.schemas.employee import EmployeeRead
 from app.database.schemas.product import (
     ProductRead,
     ProductCreate,
@@ -33,25 +31,23 @@ router = APIRouter(
 async def create_product(
     product_in: ProductCreate,
     repo: Annotated[ProductRepository, Depends(get_product_repo)],
-    employee_repo: Annotated[EmployeeRepository, Depends(get_employee_repo)],
     process_repo: Annotated[ProcessRepository, Depends(get_process_repo)],
     day_plan_repo: Annotated[DailyPlanRepository, Depends(get_daily_plan_repo)],
-    user: Annotated[User, Depends(current_user)],
+    employee: Annotated[EmployeeRead, Depends(get_current_employee)],
 ) -> ProductRead:
     try:
-        employee = await employee_repo.get_by_user_id(user.id)
         first_step = await process_repo.get_first_step(product_in.process_id)
 
-        if (
-            employee.role != Role.master
-            and not await day_plan_repo.check_step_def_in_daily_plan(
-                date=date.today(),
-                employee_id=employee.id,
-                step_def_id=first_step.id,
-            )
+        if employee.role not in [
+            Role.admin,
+            Role.master,
+        ] and not await day_plan_repo.check_step_def_in_daily_plan(
+            date=date.today(),
+            employee_id=employee.id,
+            step_def_id=first_step.id,
         ):
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="В планах нет этого этапа"
+                status_code=status.HTTP_403_FORBIDDEN, detail="В планах нет этого этапа"
             )
 
         product = await repo.create_product(product_in)
@@ -59,19 +55,14 @@ async def create_product(
 
     except IntegrityError as e:
         msg = str(e.orig)
-
-        # FK на process_id
         if (
             "violates foreign key constraint" in msg
             or "ForeignKeyViolationError" in msg
             or "foreign key" in msg.lower()
         ):
             raise HTTPException(
-                status_code=422,
-                detail="Указан несуществующий process_id",
+                status_code=422, detail="Указан несуществующий process_id"
             )
-
-        # уникальность по serial_number
         if (
             "duplicate key value" in msg
             or "уже существует" in msg
@@ -81,24 +72,15 @@ async def create_product(
                 status_code=409,
                 detail="Продукт с таким серийным номером уже существует",
             )
-
-        # прочие ошибки целостности без утечки текста SQL
         raise HTTPException(
-            status_code=400,
-            detail="Ошибка целостности данных при создании продукта",
+            status_code=400, detail="Ошибка целостности данных при создании продукта"
         )
 
     except ValueError as e:
-        # например, если в repo.create_product ты явно кинул,
-        # что процесс не найден
         raise HTTPException(status_code=422, detail=str(e))
-
     except HTTPException:
-        # если repo сам кинул HTTPException — просто пробрасываем
         raise
-
     except Exception:
-        # внутренняя ошибка без деталей наружу
         raise HTTPException(
             status_code=500,
             detail="Произошла внутренняя ошибка при создании продукта",
@@ -113,16 +95,14 @@ async def create_product(
 async def get_product(
     serial_number: str,
     repo: Annotated[ProductRepository, Depends(get_product_repo)],
-    user: Annotated[User, Depends(current_user)],
+    employee: Annotated[EmployeeRead, Depends(get_current_employee)],
 ) -> ProductRead:
     try:
         product = await repo.get(serial_number=serial_number)
         return ProductRead.model_validate(product)
     except HTTPException as exc:
-        # пробрасываем 404 и другие осознанные HTTP-ошибки
         raise exc
     except Exception:
-        # внутренняя ошибка без лишних деталей наружу
         raise HTTPException(
             status_code=500,
             detail="Произошла внутренняя ошибка при получении продукта",
@@ -136,11 +116,10 @@ async def get_product(
 )
 async def get_products_stats_by_last_done_step(
     repo: Annotated[ProductRepository, Depends(get_product_repo)],
-    user: Annotated[User, Depends(current_user)],
+    employee: Annotated[EmployeeRead, Depends(get_current_employee)],
 ) -> list[ProductsCountByLastStepRead]:
     try:
         data = await repo.get_counts_by_last_done_step()
-        # data — список dict, как мы возвращаем из репозитория
         return [ProductsCountByLastStepRead(**item) for item in data]
     except HTTPException as exc:
         raise exc
@@ -158,14 +137,13 @@ async def get_products_stats_by_last_done_step(
 )
 async def get_finished_products(
     repo: Annotated[ProductRepository, Depends(get_product_repo)],
-    employee_repo: Annotated[EmployeeRepository, Depends(get_employee_repo)],
-    user: Annotated[User, Depends(current_user)],
+    employee: Annotated[EmployeeRead, Depends(get_current_employee)],
 ) -> list[ProductsFinishedRead]:
     try:
-        employee = await employee_repo.get_by_user_id(user.id)
         employee_id = None
         if employee.role not in [Role.admin, Role.master]:
             employee_id = employee.id
+
         products = await repo.get_finished_products(employee_id=employee_id)
         return [ProductsFinishedRead.model_validate(p) for p in products]
     except HTTPException as exc:
@@ -177,9 +155,6 @@ async def get_finished_products(
         )
 
 
-from datetime import date as date_type
-
-
 @router.get(
     "/by-step-employee-day",
     response_model=list[ProductRead],
@@ -189,19 +164,13 @@ async def get_products_by_step_employee_day(
     step_definition_id: int,
     day: date_type,
     repo: Annotated[ProductRepository, Depends(get_product_repo)],
-    employee_repo: Annotated[EmployeeRepository, Depends(get_employee_repo)],
-    user: Annotated[User, Depends(current_user)],
+    employee: Annotated[EmployeeRead, Depends(get_current_employee)],
     employee_id: int | None = None,
 ) -> list[ProductRead]:
     try:
-        employee = await employee_repo.get_by_user_id(user.id)
-
-        # если не админ/мастер — всегда берём только себя
         if employee.role not in [Role.admin, Role.master]:
             effective_employee_id = employee.id
         else:
-            # админ/мастер может явно указать employee_id,
-            # иначе по умолчанию смотрит свои продукты
             effective_employee_id = employee_id or employee.id
 
         products = await repo.list_by_step_employee_and_day(
@@ -229,29 +198,19 @@ async def change_product_process(
     product_id: int,
     new_process_id: int,
     repo: Annotated[ProductRepository, Depends(get_product_repo)],
-    employee_repo: Annotated[EmployeeRepository, Depends(get_employee_repo)],
-    user: Annotated[User, Depends(current_user)],
+    employee: Annotated[EmployeeRead, Depends(require_admin_or_master)],
 ) -> ProductRead:
     try:
-        employee = await employee_repo.get_by_user_id(user.id)
-        if employee.role not in [Role.admin, Role.master]:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Данная операция недоступна",
-            )
-
         product = await repo.change_product_process(
             product_id=product_id, new_process_id=new_process_id
         )
         return ProductRead.model_validate(product)
     except HTTPException as exc:
-        # пробрасываем 404 и другие осознанные HTTP-ошибки
         raise exc
     except Exception:
-        # внутренняя ошибка без лишних деталей наружу
         raise HTTPException(
             status_code=500,
-            detail="Произошла внутренняя ошибка при получении продукта",
+            detail="Произошла внутренняя ошибка при изменении процесса продукта",
         )
 
 
@@ -262,34 +221,12 @@ async def change_product_process(
 )
 async def change_product_status(
     product_id: int,
-    status: ProductStatus,  # ?status=scrap|rework|normal
+    status: ProductStatus,
     repo: Annotated[ProductRepository, Depends(get_product_repo)],
-    employee_repo: Annotated[EmployeeRepository, Depends(get_employee_repo)],
-    user: Annotated[User, Depends(current_user)],
-) -> ProductRead:
-    return await _change_product_status_route(
-        product_id=product_id,
-        status_change_call=partial(repo.set_status, status=status),
-        employee_repo=employee_repo,
-        user=user,
-    )
-
-
-async def _change_product_status_route(
-    product_id: int,
-    status_change_call: Callable[[int], Awaitable[Product]],
-    employee_repo: EmployeeRepository,
-    user: User,
+    employee: Annotated[EmployeeRead, Depends(require_admin_or_master)],
 ) -> ProductRead:
     try:
-        employee = await employee_repo.get_by_user_id(user.id)
-        if employee.role not in [Role.admin, Role.master]:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Данная операция недоступна",
-            )
-
-        product = await status_change_call(product_id)
+        product = await repo.set_status(product_id=product_id, status=status)
         return ProductRead.model_validate(product)
     except HTTPException as exc:
         raise exc
@@ -309,7 +246,7 @@ async def get_products_by_last_completed_step(
     process_id: int,
     step_definition_id: int,
     repo: Annotated[ProductRepository, Depends(get_product_repo)],
-    user: Annotated[User, Depends(current_user)],
+    employee: Annotated[EmployeeRead, Depends(get_current_employee)],
 ) -> list[ProductRead]:
     try:
         products = await repo.list_by_process_and_last_completed_step(
