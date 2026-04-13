@@ -43,6 +43,7 @@ class ApiV1Prefix(BaseModel):
     products: str = "/products"
     processes: str = "/processes"
     packaging: str = "/packaging"
+    orders: str = "/orders"
     step_definitions: str = "/step_definitions"
     employees: str = "/employees"
     products_steps: str = "/products_steps"

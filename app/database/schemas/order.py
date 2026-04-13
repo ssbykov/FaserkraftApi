@@ -38,3 +38,10 @@ class OrderCreate(BaseSchema):
     contract_number: str
     contract_date: date
     planned_shipment_date: date
+
+class OrderUpdate(OrderCreate):
+    id: int
+
+class OrderClose(BaseSchema):
+    shipment_date: date
+    shipment_by_id: int
