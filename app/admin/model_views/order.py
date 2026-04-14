@@ -12,13 +12,15 @@ class OrderAdmin(
     name = "Заказ"
     category = "Отгрузки"
 
-    column_details_exclude_list = ("id",)
-    column_exclude_list = ("id", "items", "packaging")
+    column_list = ("contract_number", "contract_date", "planned_shipment_date")
+    column_details_exclude_list = ("id", "shipment_by_id")
 
     column_labels = {
         "contract_number": "Номер договора",
         "contract_date": "Дата договора",
-        "planned_shipment_date": "Дата исполнения",
+        "planned_shipment_date": "Дата факт",
+        "shipment_by": "Отправлено",
+        "shipment_date": "Дата план",
         "items": "Состав заказ",
         "packaging": "Упаковки",
     }
