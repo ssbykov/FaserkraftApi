@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Date, Integer, ForeignKey
+from sqlalchemy import Column, String, Date, Integer, ForeignKey, DateTime
 from sqlalchemy.orm import relationship
 
 from .base import BaseWithId
@@ -9,8 +9,8 @@ class Order(BaseWithId):
 
     contract_number = Column(String, nullable=False)
     contract_date = Column(Date, nullable=False)
-    planned_shipment_date = Column(Date, nullable=True)
-    shipment_date = Column(Date, nullable=True)
+    planned_shipment_date = Column(Date, nullable=False)
+    shipment_date = Column(DateTime(timezone=True), nullable=True)
     shipment_by_id = Column(ForeignKey("employees.id"), nullable=True)
 
     items = relationship(
