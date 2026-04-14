@@ -18,9 +18,9 @@ class OrderAdmin(
     column_labels = {
         "contract_number": "Номер договора",
         "contract_date": "Дата договора",
-        "planned_shipment_date": "Дата факт",
+        "planned_shipment_date": "Дата план",
         "shipment_by": "Отправлено",
-        "shipment_date": "Дата план",
+        "shipment_date": "Дата факт",
         "items": "Состав заказ",
         "packaging": "Упаковки",
     }
