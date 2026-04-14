@@ -119,6 +119,27 @@ async def get_all_in_storage(
 
 
 @router.get(
+    "/get_in_storage",
+    response_model=list[PackagingRead],
+    status_code=status.HTTP_200_OK,
+)
+async def get_all_in_storage(
+    repo: Annotated[PackagingRepository, Depends(get_packaging_repo)],
+    employee: Annotated[EmployeeRead, Depends(get_current_employee)],
+) -> list[PackagingRead]:
+    try:
+        packaging_boxes = await repo.get_all_excluding_closed_orders()
+        return [PackagingRead.model_validate(p) for p in packaging_boxes]
+    except HTTPException as exc:
+        raise exc
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail="Произошла внутренняя ошибка при получении списка упаковок",
+        )
+
+
+@router.get(
     "/get_all_shipped",
     response_model=list[PackagingRead],
     status_code=status.HTTP_200_OK,

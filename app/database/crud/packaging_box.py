@@ -2,13 +2,14 @@ from datetime import datetime, timezone
 from typing import Optional, List, Sequence
 
 from fastapi import HTTPException
-from sqlalchemy import select, update
+from sqlalchemy import select, update, or_
 from sqlalchemy.orm import joinedload
 
 from app.database import SessionDep, Product
 from app.database.crud.mixines import GetBackNextIdMixin
 from app.database.models import Packaging
 from app.database.schemas.packaging_box import PackagingCreate
+from database.models import Order
 
 
 def get_packaging_repo(session: SessionDep) -> "PackagingRepository":
@@ -175,3 +176,23 @@ class PackagingRepository(GetBackNextIdMixin[Packaging]):
         )
         await self.session.execute(stmt)
         await self.session.commit()
+
+    async def get_all_excluding_closed_orders(self) -> Sequence[Packaging]:
+        """
+        Возвращает все упаковки, кроме тех, которые привязаны к закрытым (отгруженным) заказам.
+        """
+        stmt = (
+            select(self.model)
+            .outerjoin(Order, self.model.order_id == Order.id)
+            .where(
+                or_(
+                    self.model.order_id.is_(None),  # Упаковка еще не привязана к заказу
+                    Order.shipment_date.is_(
+                        None
+                    ),  # Или заказ еще не закрыт (не отгружен)
+                )
+            )
+        )
+
+        result = await self.session.execute(stmt)
+        return result.scalars().all()
