@@ -120,13 +120,12 @@ async def update_order_items(
 )
 async def close_order(
         order_id: int,
-        data: OrderClose,
         repo: Annotated[OrderRepository, Depends(get_order_repo)],
         employee: Annotated[EmployeeRead, Depends(require_admin_or_master)],
 ) -> OrderRead:
     """Закрытие (отгрузка) заказа с простановкой даты и ответственного сотрудника"""
     try:
-        order = await repo.close(order_id=order_id, close_in=data)
+        order = await repo.close(order_id=order_id, employee_id=employee.id)
         return OrderRead.model_validate(order)
     except HTTPException as exc:
         raise exc

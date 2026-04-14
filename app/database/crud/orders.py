@@ -1,4 +1,7 @@
+from collections import defaultdict
+from datetime import datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException
 from sqlalchemy import select
@@ -9,7 +12,6 @@ from app.database import SessionDep
 from app.database.crud.mixines import GetBackNextIdMixin
 from app.database.models import Order, OrderItem
 from app.database.schemas.order import OrderCreate, OrderItemCreate, OrderUpdate
-from database.schemas.order import OrderClose
 
 
 def get_order_repo(session: SessionDep) -> "OrderRepository":
@@ -120,7 +122,7 @@ class OrderRepository(GetBackNextIdMixin[Order]):
     async def close(
         self,
         order_id: int,
-        close_in: OrderClose,
+        employee_id: int,
     ) -> Any | None:
 
         stmt = select(Order).where(Order.id == order_id)
@@ -138,9 +140,34 @@ class OrderRepository(GetBackNextIdMixin[Order]):
                 detail=f"Заказ {order_id} уже отгружен",
             )
 
+        # 1. Считаем сколько модулей КАЖДОГО ТИПА должно быть в заказе
+        ordered_counts = defaultdict(int)
+        for item in order.items:
+            ordered_counts[item.process_id] += item.quantity
+
+        # 2. Считаем сколько модулей КАЖДОГО ТИПА фактически лежит в упаковках
+        packed_counts = defaultdict(int)
+        for pack in order.packaging:
+            for product in pack.products:
+                # Укажи здесь правильное поле из модели Product, определяющее тип модуля
+                packed_counts[product.process_id] += 1
+
+                # Очищаем от возможных нулей (если вдруг quantity было 0) для чистого сравнения
+        ordered_clean = {k: v for k, v in ordered_counts.items() if v > 0}
+        packed_clean = {k: v for k, v in packed_counts.items() if v > 0}
+
+        # 3. Сравниваем словари
+        if ordered_clean != packed_clean:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    f"Нельзя закрыть заказ {order_id}: несоответствие комплектации. "
+                ),
+            )
+
         # Обновляем данные об отгрузке
-        order.shipment_date = close_in.shipment_date
-        order.shipment_by_id = close_in.shipment_by_id
+        order.shipment_date = datetime.now(ZoneInfo("Europe/Moscow"))
+        order.shipment_by_id = employee_id
 
         try:
             await self.session.commit()
