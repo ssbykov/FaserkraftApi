@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from datetime import datetime
+from datetime import datetime, date
 from typing import (
     Any,
     Optional,
@@ -29,23 +29,40 @@ class GetBackNextIdMixin(ABC, Generic[T]):
         self.main_stmt = select(self.model)
 
     async def get_adjacent_id(
-        self,
-        current_val: int | str,
-        list_query: Select[Any],
-        sort_column: str = "id",
-        is_next: bool = True,
+            self,
+            current_val: int | str,
+            list_query: Select[Any],
+            sort_column: str = "id",
+            is_next: bool = True,
     ) -> Optional[int]:
-        column = getattr(self.model, sort_column)
+        # 1. Убираем существующую сортировку из list_query и делаем из него подзапрос
+        subq = list_query.order_by(None).subquery()
 
-        condition, order_by = (
-            (column > current_val, column.asc())
-            if is_next
-            else (column < current_val, column.desc())
+        # 2. Достаем колонки уже из подзапроса, а не из self.model
+        sort_col = subq.c[sort_column]
+        id_col = subq.c["id"]
+
+        # 3. Приводим входящее значение к нужному типу
+        typed_val = convert_to_column_type(current_val, sort_col.type)
+
+        # 4. Формируем условия и направление сортировки
+        if is_next:
+            condition = sort_col > typed_val
+            order_by = sort_col.asc()
+        else:
+            condition = sort_col < typed_val
+            order_by = sort_col.desc()
+
+        # 5. Строим новый чистый запрос к нашему подзапросу
+        stmt = (
+            select(id_col)
+            .select_from(subq)
+            .where(condition)
+            .order_by(order_by)
+            .limit(1)
         )
-        stmt = list_query.where(condition).order_by(order_by).limit(1)
 
-        result = await self.session.scalar(stmt)
-        return result.id if result else None
+        return await self.session.scalar(stmt)
 
     async def get_all(self) -> Sequence[T]:
         result = await self.session.execute(self.main_stmt)
@@ -60,11 +77,11 @@ class GetBackNextIdMixin(ABC, Generic[T]):
         return result.scalar_one_or_none() or 0
 
     async def get_async_position(
-        self,
-        target_val: int,
-        column: str,
-        request: Request,
-        is_desc: bool = False,
+            self,
+            target_val: int,
+            column: str,
+            request: Request,
+            is_desc: bool = False,
     ) -> int | None:
         sort_column = getattr(self.model, column)
         column_type = sort_column.type
@@ -87,7 +104,7 @@ class GetBackNextIdMixin(ABC, Generic[T]):
 
         query = select(subquery.c.row_num).where(
             subquery.c[column]
-            == convert_to_column_type(target_val, column_type=column_type)
+            == convert_to_column_type(target_val, column_type)
         )
 
         result = await self.session.execute(query)
@@ -99,7 +116,7 @@ class GetBackNextIdMixin(ABC, Generic[T]):
         return result.scalar_one_or_none()
 
 
-def convert_to_column_type(variable: Any, column_type: Type[Any]) -> Any:
+def convert_to_column_type(variable: Any, column_type: Any) -> Any:
     if isinstance(column_type, Integer):
         return int(variable)
     elif isinstance(column_type, String):
@@ -107,6 +124,9 @@ def convert_to_column_type(variable: Any, column_type: Type[Any]) -> Any:
     elif isinstance(column_type, Boolean):
         return bool(variable)
     elif isinstance(column_type, Date) or isinstance(column_type, DateTime):
-        return datetime.strptime(variable, "%Y-%m-%d")
+        dt = datetime.strptime(str(variable).split("T")[0], "%Y-%m-%d")
+        if isinstance(column_type, Date):
+            return dt.date()
+        return dt
     else:
-        raise ValueError("Unsupported column type")
+        raise ValueError(f"Unsupported column type: {type(column_type)}")
