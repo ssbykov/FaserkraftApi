@@ -196,3 +196,33 @@ class PackagingRepository(GetBackNextIdMixin[Packaging]):
 
         result = await self.session.execute(stmt)
         return result.scalars().all()
+
+    async def attach_to_order(
+        self,
+        order_id: int,
+        packaging_ids: list[int],
+    ) -> None:
+        """
+        Привязывает список упаковок к указанному заказу.
+        """
+        if not packaging_ids:
+            return
+
+        stmt = (
+            update(Packaging)
+            .where(Packaging.id.in_(packaging_ids))
+            .values(order_id=order_id)
+        )
+        await self.session.execute(stmt)
+        await self.session.commit()
+
+    async def detach_from_order(self, packaging_ids: list[int],) -> None:
+        if not packaging_ids:
+            return
+        stmt = (
+            update(Packaging)
+            .where(Packaging.id.in_(packaging_ids))
+            .values(order_id=None) # Отвязываем от заказа
+        )
+        await self.session.execute(stmt)
+        await self.session.commit()

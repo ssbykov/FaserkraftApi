@@ -179,3 +179,49 @@ async def delete_packaging(
             status_code=500,
             detail="Произошла внутренняя ошибка при удалении упаковки",
         )
+
+
+@router.post(
+    "/attach_to_order/{order_id}",
+    status_code=status.HTTP_200_OK,
+)
+async def attach_packaging_to_order(
+    order_id: int,
+    packaging_ids: List[int],
+    repo: Annotated[PackagingRepository, Depends(get_packaging_repo)],
+    employee: Annotated[EmployeeRead, Depends(require_admin_or_master)],
+) -> bool:
+    try:
+        await repo.attach_to_order(
+            order_id=order_id,
+            packaging_ids=packaging_ids,
+        )
+        return True
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail="Произошла внутренняя ошибка при привязке упаковок к заказу",
+        )
+
+
+@router.post(
+    "/detach_from_order",
+    status_code=status.HTTP_200_OK,
+)
+async def detach_packaging_from_order(
+    packaging_ids: List[int],
+    repo: Annotated[PackagingRepository, Depends(get_packaging_repo)],
+    employee: Annotated[EmployeeRead, Depends(require_admin_or_master)],
+) -> bool:
+    try:
+        await repo.detach_from_order(packaging_ids)
+        return True
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail="Произошла внутренняя ошибка при привязке упаковок к заказу",
+        )
