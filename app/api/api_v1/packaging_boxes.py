@@ -1,4 +1,3 @@
-from datetime import datetime
 from typing import Annotated, List
 
 from fastapi import APIRouter, HTTPException, Depends
@@ -68,53 +67,6 @@ async def get_packaging(
         raise HTTPException(
             status_code=500,
             detail="Произошла внутренняя ошибка при получении упаковки",
-        )
-
-
-@router.post(
-    "/shipment",
-    status_code=status.HTTP_200_OK,
-)
-async def set_packaging_shipment(
-    packaging_ids: List[int],
-    repo: Annotated[PackagingRepository, Depends(get_packaging_repo)],
-    employee: Annotated[EmployeeRead, Depends(require_admin_or_master)],
-):
-    try:
-        await repo.set_shipment_for_packaging(
-            packaging_ids=packaging_ids,
-            shipment_by_id=employee.id,
-            shipment_at=datetime.now(),
-        )
-
-        return {"updated_ids": packaging_ids}
-    except HTTPException:
-        raise
-    except Exception:
-        raise HTTPException(
-            status_code=500,
-            detail="Произошла внутренняя ошибка при установке отгрузки",
-        )
-
-
-@router.get(
-    "/get_all_in_storage",
-    response_model=list[PackagingRead],
-    status_code=status.HTTP_200_OK,
-)
-async def get_all_in_storage(
-    repo: Annotated[PackagingRepository, Depends(get_packaging_repo)],
-    employee: Annotated[EmployeeRead, Depends(get_current_employee)],
-) -> list[PackagingRead]:
-    try:
-        packaging_boxes = await repo.get_all_without_shipment()
-        return [PackagingRead.model_validate(p) for p in packaging_boxes]
-    except HTTPException as exc:
-        raise exc
-    except Exception:
-        raise HTTPException(
-            status_code=500,
-            detail="Произошла внутренняя ошибка при получении списка упаковок",
         )
 
 

@@ -30,8 +30,6 @@ class PackagingRead(PackagingCreate):
     id: int
     performed_by: EmployeeRead
     performed_at: datetime
-    shipment_at: datetime | None
-    shipment_by: EmployeeRead | None
     products: List[ProductsFinishedRead]
     order_id: int | None
 

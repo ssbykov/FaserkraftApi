@@ -19,8 +19,6 @@ class PackagingAdmin(
         "products": "Изделия",
         "performed_by": "Упаковщик",
         "performed_at": "Дата упаковки",
-        "shipment_at": "Дата отгрузки",
-        "shipment_by": "Отгрузил",
         "order": "Заказ",
     }
 

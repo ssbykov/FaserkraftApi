@@ -19,10 +19,10 @@ class PackagingRepository(GetBackNextIdMixin[Packaging]):
     model = Packaging
 
     async def create_packaging(
-            self,
-            packaging_in: PackagingCreate,
-            *,
-            products: List[int],
+        self,
+        packaging_in: PackagingCreate,
+        *,
+        products: List[int],
     ) -> Packaging:
         # ищем существующую упаковку по serial_number
         stmt = select(Packaging).where(
@@ -37,8 +37,8 @@ class PackagingRepository(GetBackNextIdMixin[Packaging]):
             # создаём новую упаковку
             packaging = Packaging(
                 serial_number=packaging_in.serial_number,
-                performed_by_id = packaging_in.performed_by_id,
-                performed_at = now_utc
+                performed_by_id=packaging_in.performed_by_id,
+                performed_at=now_utc,
             )
         else:
             # обновляем только эти поля
@@ -150,33 +150,6 @@ class PackagingRepository(GetBackNextIdMixin[Packaging]):
         await self.session.delete(packaging)
         await self.session.commit()
 
-    async def get_all_without_shipment(self) -> Sequence[Packaging]:
-        stmt = self.main_stmt.where(self.model.shipment_at.is_(None))
-        result = await self.session.execute(stmt)
-        return result.scalars().all()
-
-    async def get_all_with_shipment(self) -> Sequence[Packaging]:
-        stmt = self.main_stmt.where(self.model.shipment_at.isnot(None))
-        result = await self.session.execute(stmt)
-        return result.scalars().all()
-
-    async def set_shipment_for_packaging(
-        self,
-        packaging_ids: list[int],
-        shipment_by_id: int,
-        shipment_at: datetime,
-    ) -> None:
-        stmt = (
-            update(Packaging)
-            .where(Packaging.id.in_(packaging_ids))
-            .values(
-                shipment_by_id=shipment_by_id,
-                shipment_at=shipment_at,
-            )
-        )
-        await self.session.execute(stmt)
-        await self.session.commit()
-
     async def get_all_excluding_closed_orders(self) -> Sequence[Packaging]:
         """
         Возвращает все упаковки, кроме тех, которые привязаны к закрытым (отгруженным) заказам.
@@ -216,13 +189,16 @@ class PackagingRepository(GetBackNextIdMixin[Packaging]):
         await self.session.execute(stmt)
         await self.session.commit()
 
-    async def detach_from_order(self, packaging_ids: list[int],) -> None:
+    async def detach_from_order(
+        self,
+        packaging_ids: list[int],
+    ) -> None:
         if not packaging_ids:
             return
         stmt = (
             update(Packaging)
             .where(Packaging.id.in_(packaging_ids))
-            .values(order_id=None) # Отвязываем от заказа
+            .values(order_id=None)  # Отвязываем от заказа
         )
         await self.session.execute(stmt)
         await self.session.commit()
