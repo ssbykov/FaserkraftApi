@@ -35,11 +35,17 @@ class AccessToken(BaseModel):
     verification_token_secret: str
 
 
+class AppUpdate(BaseModel):
+    release_dir: Path = Path("releases")
+    release_file: str = release_dir / "release.json"
+
+
 class ApiV1Prefix(BaseModel):
     prefix: str = "/v1"
     days: str = "/days"
     auth: str = "/auth"
     users: str = "/users"
+    update: str = "/app-update"
     products: str = "/products"
     processes: str = "/processes"
     packaging: str = "/packaging"
@@ -114,6 +120,7 @@ class Settings(BaseSettings):
     logger: LoggerConfig = LoggerConfig()
     sql_admin: SqlAdmin
     access_token: AccessToken
+    app_update: AppUpdate = AppUpdate()
     db: DbSettings
     super_user: SuperUser
     email: EmailSettings
