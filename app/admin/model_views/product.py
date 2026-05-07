@@ -33,6 +33,8 @@ class ProductAdmin(
 
     column_filters = [ProcessNameFilter()]
 
+    column_searchable_list = ("serial_number",)
+
     column_labels = {
         "serial_number": "Номер",
         "work_process": "Техпроцесс",
