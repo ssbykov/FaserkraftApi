@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional, List, Type, ClassVar
+from typing import Optional, List, Type, ClassVar, TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
 from pydantic import Field
@@ -9,6 +9,9 @@ from app.database.models.product import ProductStatus
 from app.database.schemas.process import ProcessRead, ProcessReadBase
 from app.database.schemas.product_step import ProductStepRead
 
+
+if TYPE_CHECKING:
+    from app.database.schemas.packaging_box import PackagingBase
 
 class ProductBase(BaseSchema):
     serial_number: str
@@ -30,7 +33,7 @@ class ProductRead(ProductBase):
     created_at: datetime
     status: ProductStatus
     steps: Optional[List["ProductStepRead"]]
-    packaging_id: int | None
+    packaging: Optional["PackagingBase"] = None
 
     model_config = {
         "from_attributes": True,
@@ -60,3 +63,6 @@ class ProductsCountByLastStepRead(BaseSchema):
 
     class Config:
         from_attributes = True
+
+from app.database.schemas.packaging_box import PackagingBase
+ProductRead.model_rebuild()

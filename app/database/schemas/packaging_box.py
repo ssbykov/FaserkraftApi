@@ -1,10 +1,12 @@
 from datetime import datetime
-from typing import List, ClassVar, Type
+from typing import List, ClassVar, Type, TYPE_CHECKING
 
 from app.database import BaseSchema
 from app.database.models import Packaging
 from app.database.schemas.employee import EmployeeRead
-from app.database.schemas.product import ProductsFinishedRead
+
+if TYPE_CHECKING:
+    from app.database.schemas.product import ProductsFinishedRead
 
 
 class PackagingBase(BaseSchema):
@@ -30,8 +32,13 @@ class PackagingRead(PackagingCreate):
     id: int
     performed_by: EmployeeRead
     performed_at: datetime
-    products: List[ProductsFinishedRead]
+    products: List["ProductsFinishedRead"]
     order_id: int | None
 
     class Config:
         from_attributes = True
+
+
+from app.database.schemas.product import ProductsFinishedRead
+
+PackagingRead.model_rebuild()
