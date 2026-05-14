@@ -6,7 +6,7 @@ from app.database.models import Packaging
 from app.database.schemas.employee import EmployeeRead
 
 if TYPE_CHECKING:
-    from app.database.schemas.product import ProductsFinishedRead
+    from app.database.schemas.product import ProductShortRead
 
 
 class PackagingBase(BaseSchema):
@@ -32,13 +32,13 @@ class PackagingRead(PackagingCreate):
     id: int
     performed_by: EmployeeRead
     performed_at: datetime
-    products: List["ProductsFinishedRead"]
+    products: List["ProductShortRead"]
     order_id: int | None
 
     class Config:
         from_attributes = True
 
 
-from app.database.schemas.product import ProductsFinishedRead
+from app.database.schemas.product import ProductShortRead
 
 PackagingRead.model_rebuild()

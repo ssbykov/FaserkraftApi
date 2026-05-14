@@ -13,6 +13,8 @@ class PackagingAdmin(
     category = "Раздел изделий"
     category_icon = "fa-solid fa-cog"
 
+    column_searchable_list = ("serial_number",)
+
     column_labels = {
         "serial_number": "Номер",
         "description": "Описание",

@@ -41,9 +41,10 @@ class ProductRead(ProductBase):
     }
 
 
-class ProductsFinishedRead(ProductBase):
+class ProductShortRead(ProductBase):
     id: int
     work_process: ProcessReadBase
+    status: ProductStatus
 
     class Config:
         from_attributes = True

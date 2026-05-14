@@ -18,7 +18,7 @@ from app.database.schemas.product import (
     ProductRead,
     ProductCreate,
     ProductsCountByLastStepRead,
-    ProductsFinishedRead,
+    ProductShortRead,
 )
 
 router = APIRouter(
@@ -132,20 +132,20 @@ async def get_products_stats_by_last_done_step(
 
 @router.get(
     "/finished",
-    response_model=list[ProductsFinishedRead],
+    response_model=list[ProductShortRead],
     status_code=status.HTTP_200_OK,
 )
 async def get_finished_products(
     repo: Annotated[ProductRepository, Depends(get_product_repo)],
     employee: Annotated[EmployeeRead, Depends(get_current_employee)],
-) -> list[ProductsFinishedRead]:
+) -> list[ProductShortRead]:
     try:
         employee_id = None
         if employee.role not in [Role.admin, Role.master]:
             employee_id = employee.id
 
         products = await repo.get_finished_products(employee_id=employee_id)
-        return [ProductsFinishedRead.model_validate(p) for p in products]
+        return [ProductShortRead.model_validate(p) for p in products]
     except HTTPException as exc:
         raise exc
     except Exception:

@@ -15,6 +15,8 @@ class OrderAdmin(
     column_list = ("contract_number", "contract_date", "planned_shipment_date")
     column_details_exclude_list = ("id", "shipment_by_id")
 
+    column_searchable_list = ("contract_number",)
+
     column_labels = {
         "contract_number": "Номер договора",
         "contract_date": "Дата договора",
