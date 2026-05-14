@@ -425,3 +425,23 @@ class ProductRepository(GetBackNextIdMixin[Product]):
 
         result = await self.session.scalars(stmt)
         return result.unique().all()
+
+    async def get_products_not_normal(self) -> list[Product]:
+        """
+        Возвращает список продуктов, статус которых отличается от ProductStatus.normal.
+        """
+        stmt = (
+            select(Product)
+            .where(Product.status != ProductStatus.normal)
+            .options(
+                joinedload(Product.work_process),
+                joinedload(Product.steps)
+                .joinedload(ProductStep.step_definition)
+                .joinedload(StepDefinition.template),
+                joinedload(Product.steps).joinedload(ProductStep.performed_by),
+            )
+            .order_by(Product.id)
+        )
+
+        result = await self.session.scalars(stmt)
+        return list(result.unique().all())

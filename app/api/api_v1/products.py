@@ -261,3 +261,23 @@ async def get_products_by_last_completed_step(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Произошла внутренняя ошибка при получении продуктов",
         )
+
+@router.get(
+    "/not-normal",
+    response_model=list[ProductRead],
+    status_code=status.HTTP_200_OK,
+)
+async def get_products_not_normal(
+    repo: Annotated[ProductRepository, Depends(get_product_repo)],
+    employee: Annotated[EmployeeRead, Depends(get_current_employee)],
+) -> list[ProductRead]:
+    try:
+        products = await repo.get_products_not_normal()
+        return [ProductRead.model_validate(p) for p in products]
+    except HTTPException as exc:
+        raise exc
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail="Произошла внутренняя ошибка при получении списка проблемных продуктов",
+        )
