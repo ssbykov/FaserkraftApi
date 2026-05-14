@@ -3,17 +3,20 @@ from typing import Optional, List, Sequence
 
 from fastapi import HTTPException
 from sqlalchemy import select, update, or_
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, selectinload
+from starlette import status
 
 from app.database import SessionDep, Product
 from app.database.crud.mixines import GetBackNextIdMixin
 from app.database.models import Packaging
+from app.database.models.product import ProductStatus
 from app.database.schemas.packaging_box import PackagingCreate
 from database.models import Order
 
 
 def get_packaging_repo(session: SessionDep) -> "PackagingRepository":
     return PackagingRepository(session)
+
 
 class PackagingRepository(GetBackNextIdMixin[Packaging]):
     model = Packaging
@@ -176,17 +179,41 @@ class PackagingRepository(GetBackNextIdMixin[Packaging]):
         packaging_ids: list[int],
     ) -> None:
         """
-        Привязывает список упаковок к указанному заказу.
+        Привязывает список упаковок к указанному заказу с проверкой статуса изделий.
         """
         if not packaging_ids:
             return
 
+        # 1. Загружаем нужные упаковки и их продукты (используем selectinload для коллекций)
         stmt = (
-            update(Packaging)
+            select(Packaging)
+            .options(selectinload(Packaging.products))
             .where(Packaging.id.in_(packaging_ids))
-            .values(order_id=order_id)
         )
-        await self.session.execute(stmt)
+        packaging_list = list((await self.session.scalars(stmt)).all())
+
+        # 2. Проверяем, есть ли продукты со статусом, отличным от NORMAL
+        invalid_packaging = [
+            pack.serial_number
+            for pack in packaging_list
+            if any(product.status != ProductStatus.normal for product in pack.products)
+        ]
+
+        if invalid_packaging:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "Нельзя привязать к заказу упаковки, содержащие изделия "
+                    "со статусом, отличным от NORMAL: "
+                    f"{', '.join(invalid_packaging)}"
+                ),
+            )
+
+        # 3. Выполняем привязку
+        # Так как объекты уже загружены в сессию, мы можем просто обновить их атрибуты напрямую
+        for pack in packaging_list:
+            pack.order_id = order_id
+
         await self.session.commit()
 
     async def detach_from_order(
