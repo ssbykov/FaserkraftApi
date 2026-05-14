@@ -12,6 +12,7 @@ from app.database import SessionDep
 from app.database.crud.mixines import GetBackNextIdMixin
 from app.database.models import Order, OrderItem
 from app.database.schemas.order import OrderCreate, OrderItemCreate, OrderUpdate
+from database.validators.packaging import get_packaging_with_non_normal_products
 
 
 def get_order_repo(session: SessionDep) -> "OrderRepository":
@@ -140,19 +141,28 @@ class OrderRepository(GetBackNextIdMixin[Order]):
                 detail=f"Заказ {order_id} уже отгружен",
             )
 
-        # 1. Считаем сколько модулей КАЖДОГО ТИПА должно быть в заказе
+        invalid_packaging = get_packaging_with_non_normal_products(order.packaging)
+        if invalid_packaging:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "Нельзя закрыть заказ: в упаковках есть изделия "
+                    "со статусом, отличным от NORMAL: "
+                    f"{', '.join(invalid_packaging)}"
+                ),
+            )
+
+        # 1. Считаем сколько модулей каждого типа должно быть в заказе
         ordered_counts = defaultdict(int)
         for item in order.items:
             ordered_counts[item.process_id] += item.quantity
 
-        # 2. Считаем сколько модулей КАЖДОГО ТИПА фактически лежит в упаковках
+        # 2. Считаем сколько модулей каждого типа фактически лежит в упаковках
         packed_counts = defaultdict(int)
         for pack in order.packaging:
             for product in pack.products:
-                # Укажи здесь правильное поле из модели Product, определяющее тип модуля
                 packed_counts[product.process_id] += 1
 
-                # Очищаем от возможных нулей (если вдруг quantity было 0) для чистого сравнения
         ordered_clean = {k: v for k, v in ordered_counts.items() if v > 0}
         packed_clean = {k: v for k, v in packed_counts.items() if v > 0}
 
@@ -160,12 +170,10 @@ class OrderRepository(GetBackNextIdMixin[Order]):
         if ordered_clean != packed_clean:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=(
-                    f"Нельзя закрыть заказ {order_id}: несоответствие комплектации. "
-                ),
+                detail=f"Нельзя закрыть заказ {order_id}: несоответствие комплектации.",
             )
 
-        # Обновляем данные об отгрузке
+        # 4. Обновляем данные об отгрузке
         order.shipment_date = datetime.now(ZoneInfo("Europe/Moscow"))
         order.shipment_by_id = employee_id
 

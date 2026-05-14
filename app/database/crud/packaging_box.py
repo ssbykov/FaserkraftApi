@@ -9,9 +9,9 @@ from starlette import status
 from app.database import SessionDep, Product
 from app.database.crud.mixines import GetBackNextIdMixin
 from app.database.models import Packaging
-from app.database.models.product import ProductStatus
 from app.database.schemas.packaging_box import PackagingCreate
-from database.models import Order
+from app.database.models import Order
+from app.database.validators.packaging import get_packaging_with_non_normal_products
 
 
 def get_packaging_repo(session: SessionDep) -> "PackagingRepository":
@@ -193,11 +193,7 @@ class PackagingRepository(GetBackNextIdMixin[Packaging]):
         packaging_list = list((await self.session.scalars(stmt)).all())
 
         # 2. Проверяем, есть ли продукты со статусом, отличным от NORMAL
-        invalid_packaging = [
-            pack.serial_number
-            for pack in packaging_list
-            if any(product.status != ProductStatus.normal for product in pack.products)
-        ]
+        invalid_packaging = get_packaging_with_non_normal_products(packaging_list)
 
         if invalid_packaging:
             raise HTTPException(
