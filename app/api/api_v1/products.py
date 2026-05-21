@@ -20,6 +20,11 @@ from app.database.schemas.product import (
     ProductsCountByLastStepRead,
     ProductShortRead,
 )
+from app.database.schemas.statistics import (
+    PeriodStatisticsRead,
+    StepCountStatRead,
+    ProcessCountStatRead,
+)
 
 router = APIRouter(
     tags=["Products"],
@@ -156,6 +161,45 @@ async def get_finished_products(
 
 
 @router.get(
+    "/statistics/period",
+    response_model=PeriodStatisticsRead,
+    status_code=status.HTTP_200_OK,
+)
+async def get_period_statistics(
+    date_from: date,
+    date_to: date,
+    repo: Annotated[ProductRepository, Depends(get_product_repo)],
+    employee: Annotated[EmployeeRead, Depends(get_current_employee)],
+):
+    try:
+        if employee.role not in [Role.admin, Role.master]:
+            raise HTTPException(status_code=403, detail="Недостаточно прав")
+
+        # 1. Получаем агрегированную статистику по завершенным продуктам (вместо списка продуктов)
+        finished_products_data = await repo.get_finished_products_stats_by_period(
+            date_from, date_to
+        )
+
+        # 2. Получаем агрегированную статистику по этапам
+        steps_data = await repo.get_completed_steps_stats_by_period(date_from, date_to)
+
+        return PeriodStatisticsRead(
+            # Мапим словари в новые ProcessCountStatRead
+            finished_products=[
+                ProcessCountStatRead(**item) for item in finished_products_data
+            ],
+            total_steps=[StepCountStatRead(**item) for item in steps_data],
+        )
+    except HTTPException as exc:
+        raise exc
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail="Произошла ошибка при получении статистики",
+        )
+
+
+@router.get(
     "/by-step-employee-day",
     response_model=list[ProductRead],
     status_code=status.HTTP_200_OK,
@@ -261,6 +305,7 @@ async def get_products_by_last_completed_step(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Произошла внутренняя ошибка при получении продуктов",
         )
+
 
 @router.get(
     "/not-normal",

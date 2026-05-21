@@ -19,6 +19,7 @@ from app.database.models import DailyPlanStep
 from app.database.models.product import ProductStatus
 from app.database.models.product_step import StepStatus
 from app.database.schemas.product import ProductCreate
+from database import Employee
 
 
 def get_product_repo(session: SessionDep) -> "ProductRepository":
@@ -340,6 +341,98 @@ class ProductRepository(GetBackNextIdMixin[Product]):
 
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
+
+    async def get_finished_products_stats_by_period(
+        self,
+        date_from: date_type,
+        date_to: date_type,
+    ):
+        """
+        Считает количество завершённых продуктов по процессам, у которых последний этап
+        был выполнен в указанный период.
+        """
+        not_done_exists = (
+            select(ProductStep.id)
+            .where(
+                ProductStep.product_id == Product.id,
+                ProductStep.status != StepStatus.done,
+            )
+            .exists()
+        )
+
+        last_step_date_subq = (
+            select(func.date(ProductStep.performed_at))
+            .join(StepDefinition, StepDefinition.id == ProductStep.step_definition_id)
+            .where(
+                ProductStep.product_id == Product.id,
+                ProductStep.status == StepStatus.done,
+                ProductStep.performed_at.is_not(None),
+            )
+            .order_by(desc(StepDefinition.order))
+            .limit(1)
+            .scalar_subquery()
+        )
+
+        conditions = [
+            Product.status == ProductStatus.normal,
+            ~not_done_exists,
+            last_step_date_subq >= date_from,
+            last_step_date_subq <= date_to,
+        ]
+
+        stmt = (
+            select(
+                Process.id.label("process_id"),
+                Process.name.label("process_name"),
+                func.count(Product.id).label("count"),
+            )
+            .select_from(Product)
+            .join(Process, Process.id == Product.process_id)
+            .where(*conditions)
+            .group_by(Process.id, Process.name)
+        )
+
+        result = await self.session.execute(stmt)
+        return [dict(row._mapping) for row in result.all()]
+
+    async def get_completed_steps_stats_by_period(
+        self, date_from: date_type, date_to: date_type
+    ):
+        """Считает количество закрытых этапов по процессам и сотрудникам за период."""
+        stmt = (
+            select(
+                Product.process_id,
+                Process.name.label("process_name"),
+                ProductStep.step_definition_id,
+                StepDefinition.order.label("order"),
+                StepTemplate.name.label("step_name"),
+                ProductStep.performed_by_id.label("employee_id"),
+                Employee.name.label("employee_name"),
+                func.count(ProductStep.id).label("count"),
+            )
+            .select_from(ProductStep)
+            .join(Product, Product.id == ProductStep.product_id)
+            .join(Process, Process.id == Product.process_id)
+            .join(StepDefinition, StepDefinition.id == ProductStep.step_definition_id)
+            .join(StepTemplate, StepTemplate.id == StepDefinition.template_id)
+            .join(Employee, Employee.id == ProductStep.performed_by_id)
+            .where(ProductStep.status == StepStatus.done)
+            .where(ProductStep.performed_at.is_not(None))
+            .where(func.date(ProductStep.performed_at) >= date_from)
+            .where(func.date(ProductStep.performed_at) <= date_to)
+            .group_by(
+                Product.process_id,
+                Process.name,
+                ProductStep.step_definition_id,
+                StepDefinition.order,
+                StepTemplate.name,
+                ProductStep.performed_by_id,
+                Employee.name,
+            )
+        )
+
+        result = await self.session.execute(stmt)
+        return [dict(row._mapping) for row in result.all()]
 
     async def list_by_process_and_last_completed_step(
         self,
