@@ -1,7 +1,7 @@
-from sqlalchemy import String, Unicode
+from sqlalchemy import String
 from sqlalchemy.orm import Mapped, mapped_column
 
-from . import BaseWithId
+from .base import BaseWithId
 
 
 class BackupDb(BaseWithId):
