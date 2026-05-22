@@ -1,20 +1,21 @@
-from .base import BaseWithId, Base
-from .packaging_box import Packaging
-from .user import User
 from .access_token import AccessToken
 from .backup_db import BackupDb
+from .base import BaseWithId, Base
+from .daily_plan import DailyPlan
+from .daily_plan_step import DailyPlanStep
+from .device import Device
 from .employee import Employee
+from .inventory import Inventory, InventoryItem
+from .order import Order, OrderItem
+from .packaging_box import Packaging
 from .process import Process
 from .product import Product
 from .product_step import ProductStep
+from .size_type import SizeType
 from .step_definition import StepDefinition
 from .step_template import StepTemplate
-from .daily_plan import DailyPlan
-from .device import Device
+from .user import User
 from .yandex_token import YandexToken
-from .daily_plan_step import DailyPlanStep
-from .size_type import SizeType
-from .order import Order, OrderItem
 
 __all__ = [
     "BaseWithId",
@@ -36,4 +37,6 @@ __all__ = [
     "SizeType",
     "Order",
     "OrderItem",
+    "Inventory",
+    "InventoryItem",
 ]
