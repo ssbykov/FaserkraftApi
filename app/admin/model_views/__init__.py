@@ -12,6 +12,8 @@ from .step_definition import StepDefinitionAdmin
 from .step_template import StepTemplateAdmin
 from .user import UserAdmin
 from .order import OrderAdmin
+from .inventory import InventoryAdmin
+from .inventory_item import InventoryItemAdmin
 
 __all__ = [
     "BackupDbAdmin",
@@ -28,4 +30,6 @@ __all__ = [
     "DailyPlanStepAdmin",
     "SizeType",
     "OrderAdmin",
+    "InventoryAdmin",
+    "InventoryItemAdmin",
 ]
