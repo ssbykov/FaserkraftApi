@@ -3,7 +3,8 @@ from sqlalchemy.orm import relationship, column_property
 
 from .base import BaseWithId
 from .product_step import StepStatus
-from app.database.models import ProductStep, DailyPlan
+from .product_step import ProductStep
+from .daily_plan import DailyPlan
 
 
 class DailyPlanStep(BaseWithId):
