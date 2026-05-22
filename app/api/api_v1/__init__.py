@@ -13,6 +13,7 @@ from .employees import router as employees_router
 from .step_definitions import router as step_definitions_router
 from .orders import router as orders_router
 from .update import router as updates_router
+from .inventory import router as inventory_router
 
 http_bearer = HTTPBearer(auto_error=False)
 
@@ -34,3 +35,4 @@ router.include_router(router=employees_router)
 router.include_router(router=step_definitions_router)
 router.include_router(router=orders_router)
 router.include_router(router=updates_router)
+router.include_router(router=inventory_router)
