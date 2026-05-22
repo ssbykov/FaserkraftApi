@@ -51,6 +51,11 @@ class Employee(BaseWithId):
         back_populates="performed_by",
         foreign_keys="Packaging.performed_by_id",
     )
+    inventory = relationship(
+        "Inventory",
+        back_populates="created_by",
+        foreign_keys="Inventory.created_by_id",
+    )
 
     def __repr__(self):
         return self.name
