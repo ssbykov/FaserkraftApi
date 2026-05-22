@@ -37,3 +37,7 @@ class StepDefinition(BaseWithId):
 
     def __repr__(self):
         return f"{self.order}: {self.template}"
+
+    @property
+    def full_name(self):
+        return f"{self.work_process}: {self.template}"
