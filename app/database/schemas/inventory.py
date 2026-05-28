@@ -2,7 +2,10 @@ from datetime import datetime
 
 from app.database import BaseSchema
 from app.database.schemas.employee import EmployeeRead
-
+from app.database.schemas.detailed import (
+    StepDefinitionReadWithProcess,
+    ProductInventoryItem,
+)
 
 # ---------- Inventory ----------
 
@@ -13,8 +16,13 @@ class InventoryRead(BaseSchema):
     created_at: datetime
     completed_at: datetime | None
 
-    class Config:
-        from_attributes = True
+
+class InventoryListItemOut(BaseSchema):
+    id: int
+    created_at: datetime
+    completed_at: datetime | None
+    created_by_id: int
+    item_count: int
 
 
 # ---------- InventoryItem ----------
@@ -24,27 +32,21 @@ class InventoryItemRead(BaseSchema):
     id: int
     inventory_id: int
     serial_number: str
-    step_definition_id: int
+    step_definition: StepDefinitionReadWithProcess
     scanned_at: datetime
 
-    class Config:
-        from_attributes = True
+
+class AddInventoryItemRequest(BaseSchema):
+    serial_number: str
+    step_definition_id: int
 
 
 # ---------- Compare ----------
 
 
 class InventoryCompareResultRead(BaseSchema):
-    """
-    Результат сверки отсканированных позиций с учётными данными
-    по одному этапу технологического процесса.
-    """
-
-    step_definition_id: int
-    step_name: str | None
-    process_id: int | None
     db_count: int
     scanned_count: int
-    matched: list[str]
-    missing: list[str]  # в учёте есть, физически не найдены
-    unexpected: list[str]  # физически найдены, в учёте нет
+    matched: list[ProductInventoryItem]
+    missing: list[ProductInventoryItem]
+    unexpected: list[ProductInventoryItem]
