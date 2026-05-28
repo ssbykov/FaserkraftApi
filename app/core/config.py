@@ -53,6 +53,7 @@ class ApiV1Prefix(BaseModel):
     step_definitions: str = "/step_definitions"
     employees: str = "/employees"
     products_steps: str = "/products_steps"
+    inventories: str = "/inventories"
 
 
 class ApiPrefix(BaseModel):
