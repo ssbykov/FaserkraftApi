@@ -8,5 +8,3 @@ class EmployeeRead(BaseSchema):
     name: str
     user: UserRead
     role: Role
-
-    model_config = {"from_attributes": True}
