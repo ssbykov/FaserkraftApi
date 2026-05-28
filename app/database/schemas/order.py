@@ -5,15 +5,13 @@ from pydantic import Field
 from app.database import BaseSchema
 from app.database.schemas.employee import EmployeeRead
 from app.database.schemas.packaging_box import PackagingRead
-from app.database.schemas.process import ProcessReadBase
+from app.database.schemas.process import ProcessReadShort
 
 
 class OrderItemRead(BaseSchema):
     id: int
     quantity: int
-    work_process: ProcessReadBase
-
-    model_config = {"from_attributes": True}
+    work_process: ProcessReadShort
 
 
 class OrderRead(BaseSchema):
@@ -26,8 +24,6 @@ class OrderRead(BaseSchema):
     items: list[OrderItemRead] = Field(default_factory=list)
     packaging: list[PackagingRead] = Field(default_factory=list)
 
-    model_config = {"from_attributes": True}
-
 
 class OrderItemCreate(BaseSchema):
     process_id: int
@@ -39,8 +35,10 @@ class OrderCreate(BaseSchema):
     contract_date: date
     planned_shipment_date: date
 
+
 class OrderUpdate(OrderCreate):
     id: int
+
 
 class OrderClose(BaseSchema):
     shipment_date: date
