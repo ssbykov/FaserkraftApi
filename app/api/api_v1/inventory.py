@@ -1,7 +1,6 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.exc import IntegrityError
 from starlette import status
 
 from app.api.api_v1.dependencies import require_admin_or_master
@@ -12,6 +11,8 @@ from app.database.schemas.inventory import (
     InventoryRead,
     InventoryItemRead,
     InventoryCompareResultRead,
+    InventoryListItemOut,
+    AddInventoryItemRequest,
 )
 
 router = APIRouter(
@@ -37,14 +38,16 @@ async def create_inventory(
         )
 
 
-@router.get("", response_model=list[InventoryRead], status_code=status.HTTP_200_OK)
+@router.get(
+    "", response_model=list[InventoryListItemOut], status_code=status.HTTP_200_OK
+)
 async def get_all_inventories(
     repo: Annotated[InventoryRepository, Depends(get_inventory_repo)],
     employee: Annotated[EmployeeRead, Depends(require_admin_or_master)],
-) -> list[InventoryRead]:
+) -> list[InventoryListItemOut]:
     try:
-        inventories = await repo.get_all_inventories()
-        return [InventoryRead.model_validate(i) for i in inventories]
+        raw_inventories = await repo.get_all_inventories()
+        return [InventoryListItemOut.model_validate(i) for i in raw_inventories]
     except HTTPException:
         raise
     except Exception:
@@ -65,7 +68,7 @@ async def get_inventory(
     employee: Annotated[EmployeeRead, Depends(require_admin_or_master)],
 ) -> InventoryRead:
     try:
-        inventory = await repo.get_inventory(inventory_id)
+        inventory = await repo.get_inventory_by_id(inventory_id)
         return InventoryRead.model_validate(inventory)
     except HTTPException:
         raise
@@ -108,23 +111,17 @@ async def complete_inventory(
 )
 async def add_inventory_item(
     inventory_id: int,
-    serial_number: str,
-    step_definition_id: int,
+    request: AddInventoryItemRequest,
     repo: Annotated[InventoryRepository, Depends(get_inventory_repo)],
     employee: Annotated[EmployeeRead, Depends(require_admin_or_master)],
 ) -> InventoryItemRead:
     try:
         item = await repo.add_item(
             inventory_id=inventory_id,
-            serial_number=serial_number,
-            step_definition_id=step_definition_id,
+            serial_number=request.serial_number,
+            step_definition_id=request.step_definition_id,
         )
         return InventoryItemRead.model_validate(item)
-    except IntegrityError:
-        raise HTTPException(
-            status_code=409,
-            detail=f"Изделие {serial_number} уже добавлено в эту инвентаризацию",
-        )
     except HTTPException:
         raise
     except Exception:
@@ -194,11 +191,11 @@ async def compare_inventory(
     employee: Annotated[EmployeeRead, Depends(require_admin_or_master)],
 ) -> list[InventoryCompareResultRead]:
     try:
-        result = await repo.compare(inventory_id)
-        return [InventoryCompareResultRead(**item) for item in result]
+        raw_results = await repo.compare(inventory_id)
+        return [InventoryCompareResultRead.model_validate(item) for item in raw_results]
     except HTTPException:
         raise
-    except Exception:
+    except Exception as e:
         raise HTTPException(
             status_code=500,
             detail="Произошла внутренняя ошибка при сравнении инвентаризации",
