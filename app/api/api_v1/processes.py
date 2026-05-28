@@ -8,7 +8,7 @@ from app.core import settings
 from app.database import Process
 from app.database.crud.processes import ProcessRepository, get_process_repo
 from app.database.models import User
-from app.database.schemas.process import ProcessRead
+from app.database.schemas.detailed import ProcessRead
 
 router = APIRouter(
     tags=["Processes"],
