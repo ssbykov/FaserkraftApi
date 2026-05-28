@@ -3,7 +3,7 @@ from sqlalchemy.orm import selectinload
 
 from app.database import Process, SessionDep, StepDefinition
 from app.database.crud.mixines import GetBackNextIdMixin
-from database.schemas.step_definition import StepDefinitionRead
+from app.database.schemas.step_definition import StepDefinitionRead
 
 
 def get_process_repo(session: SessionDep) -> "ProcessRepository":
