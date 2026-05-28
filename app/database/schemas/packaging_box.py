@@ -12,8 +12,6 @@ if TYPE_CHECKING:
 class PackagingBase(BaseSchema):
     serial_number: str
 
-    model_config = {"from_attributes": True}
-
 
 class PackagingCreate(PackagingBase):
     performed_by_id: int = None
