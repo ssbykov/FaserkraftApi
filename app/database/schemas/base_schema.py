@@ -23,3 +23,5 @@ class BaseSchema(BaseModel):
         raise ValueError(
             "Параметры model_class не соответствуют параметрам базового класса."
         )
+
+    model_config = {"from_attributes": True}
