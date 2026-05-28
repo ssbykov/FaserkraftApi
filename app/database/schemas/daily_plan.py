@@ -22,7 +22,6 @@ class DailyPlanRead(DailyPlanBase):
     employee: EmployeeRead
     steps: Optional[List["DailyPlanStepRead"]]
 
-    model_config = {"from_attributes": True}
 
 class DailyPlanCopyRequest(BaseModel):
     from_date: date
