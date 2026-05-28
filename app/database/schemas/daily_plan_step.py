@@ -1,7 +1,5 @@
 from datetime import date as date_type
 
-from sqlalchemy.orm import Mapped
-
 from app.database import BaseSchema
 from app.database.schemas.step_definition import StepDefinitionRead
 
@@ -28,5 +26,3 @@ class DailyPlanStepRead(DailyPlanStepBase):
     id: int
     work_process: str
     step_definition: StepDefinitionRead
-
-    model_config = {"from_attributes": True}
