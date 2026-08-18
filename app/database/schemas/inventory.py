@@ -1,11 +1,9 @@
 from datetime import datetime
 
 from app.database import BaseSchema
+from app.database.schemas.detailed import StepDefinitionReadWithProcess
 from app.database.schemas.employee import EmployeeRead
-from app.database.schemas.detailed import (
-    StepDefinitionReadWithProcess,
-    ProductInventoryItem,
-)
+from database.models.product import ProductStatus
 
 # ---------- Inventory ----------
 
@@ -44,9 +42,10 @@ class AddInventoryItemRequest(BaseSchema):
 # ---------- Compare ----------
 
 
-class InventoryCompareResultRead(BaseSchema):
-    db_count: int
-    scanned_count: int
-    matched: list[ProductInventoryItem]
-    missing: list[ProductInventoryItem]
-    unexpected: list[ProductInventoryItem]
+class ProductInventoryCompareItemRead(BaseSchema):
+    id: int
+    serial_number: str
+    status: ProductStatus
+    inventory_step_definition: StepDefinitionReadWithProcess | None
+    accounting_step_definition: StepDefinitionReadWithProcess | None
+    performed_at: datetime | None
