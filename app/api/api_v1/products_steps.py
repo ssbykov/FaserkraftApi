@@ -116,3 +116,42 @@ async def change_step_performer(
             status_code=500,
             detail=f"Произошла внутренняя ошибка {e}",
         )
+
+@router.post(
+    "/reset",
+    response_model=ProductRead,
+    status_code=status.HTTP_200_OK,
+)
+async def reset_step_and_subsequent(
+    step_id: int,
+    repo: Annotated[ProductStepRepository, Depends(get_products_steps_repo)],
+    employee: Annotated[EmployeeRead, Depends(get_current_employee)],
+) -> ProductRead:
+    try:
+        if employee.role not in [Role.admin, Role.master]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Недостаточно прав для сброса этапов",
+            )
+
+        success = await repo.reset_step_and_subsequent(step_id=step_id)
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Шаг не найден",
+            )
+
+        return success
+
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Произошла внутренняя ошибка: {e}",
+        )
