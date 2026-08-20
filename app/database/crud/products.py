@@ -397,7 +397,10 @@ class ProductRepository(GetBackNextIdMixin[Product]):
         return [dict(row._mapping) for row in result.all()]
 
     async def get_completed_steps_stats_by_period(
-        self, date_from: date_type, date_to: date_type
+        self,
+        date_from: date_type,
+        date_to: date_type,
+        employee_id: int | None = None,
     ):
         """Считает количество закрытых этапов по процессам, типоразмерам и сотрудникам за период."""
         stmt = (
@@ -420,21 +423,27 @@ class ProductRepository(GetBackNextIdMixin[Product]):
             .join(StepDefinition, StepDefinition.id == ProductStep.step_definition_id)
             .join(StepTemplate, StepTemplate.id == StepDefinition.template_id)
             .join(Employee, Employee.id == ProductStep.performed_by_id)
-            .where(ProductStep.status == StepStatus.done)
-            .where(ProductStep.performed_at.is_not(None))
-            .where(func.date(ProductStep.performed_at) >= date_from)
-            .where(func.date(ProductStep.performed_at) <= date_to)
-            .group_by(
-                Product.process_id,
-                Process.name,
-                Process.size_type_id,
-                SizeType.name,
-                ProductStep.step_definition_id,
-                StepDefinition.order,
-                StepTemplate.name,
-                ProductStep.performed_by_id,
-                Employee.name,
+            .where(
+                ProductStep.status == StepStatus.done,
+                ProductStep.performed_at.is_not(None),
+                func.date(ProductStep.performed_at) >= date_from,
+                func.date(ProductStep.performed_at) <= date_to,
             )
+        )
+
+        if employee_id is not None:
+            stmt = stmt.where(ProductStep.performed_by_id == employee_id)
+
+        stmt = stmt.group_by(
+            Product.process_id,
+            Process.name,
+            Process.size_type_id,
+            SizeType.name,
+            ProductStep.step_definition_id,
+            StepDefinition.order,
+            StepTemplate.name,
+            ProductStep.performed_by_id,
+            Employee.name,
         )
 
         result = await self.session.execute(stmt)

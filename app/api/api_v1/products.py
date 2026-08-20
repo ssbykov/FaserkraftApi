@@ -172,16 +172,24 @@ async def get_period_statistics(
     employee: Annotated[EmployeeRead, Depends(get_current_employee)],
 ):
     try:
-        if employee.role not in [Role.admin, Role.master]:
-            raise HTTPException(status_code=403, detail="Недостаточно прав")
+        employee_id = None
+        finished_products_data = []
 
-        # 1. Агрегированная статистика по завершенным продуктам
-        finished_products_data = await repo.get_finished_products_stats_by_period(
-            date_from, date_to
+        # Завершенные продукты запрашиваются только для админов и мастеров
+        if employee.role in [Role.admin, Role.master]:
+            finished_products_data = await repo.get_finished_products_stats_by_period(
+                date_from=date_from,
+                date_to=date_to,
+            )
+        else:
+            employee_id = employee.id
+
+        # Статистика по выполненным этапам (с фильтрацией по worker, если не админ/мастер)
+        steps_data = await repo.get_completed_steps_stats_by_period(
+            date_from=date_from,
+            date_to=date_to,
+            employee_id=employee_id,
         )
-
-        # 2. Агрегированная статистика по выполненным этапам
-        steps_data = await repo.get_completed_steps_stats_by_period(date_from, date_to)
 
         return PeriodStatisticsRead(
             finished_products=[
@@ -196,7 +204,6 @@ async def get_period_statistics(
             status_code=500,
             detail="Произошла ошибка при получении статистики",
         )
-
 
 @router.get(
     "/by-step-employee-day",
