@@ -10,7 +10,7 @@ from app.database.schemas.employee import EmployeeRead
 from app.database.schemas.inventory import (
     InventoryRead,
     InventoryItemRead,
-    InventoryCompareResultRead,
+    ProductInventoryCompareItemRead,
     InventoryListItemOut,
     AddInventoryItemRequest,
 )
@@ -182,17 +182,17 @@ async def get_inventory_items(
 
 @router.post(
     "/{inventory_id}/compare",
-    response_model=list[InventoryCompareResultRead],
+    response_model=list[ProductInventoryCompareItemRead],
     status_code=status.HTTP_200_OK,
 )
 async def compare_inventory(
     inventory_id: int,
     repo: Annotated[InventoryRepository, Depends(get_inventory_repo)],
     employee: Annotated[EmployeeRead, Depends(require_admin_or_master)],
-) -> list[InventoryCompareResultRead]:
+) -> list[ProductInventoryCompareItemRead]:
     try:
         raw_results = await repo.compare(inventory_id)
-        return [InventoryCompareResultRead.model_validate(item) for item in raw_results]
+        return [ProductInventoryCompareItemRead.model_validate(item) for item in raw_results]
     except HTTPException:
         raise
     except Exception as e:

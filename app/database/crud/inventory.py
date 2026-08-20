@@ -1,9 +1,8 @@
-from collections import defaultdict
 from datetime import datetime, timezone
 
 from fastapi import HTTPException
 from sqlalchemy import select, desc, func, or_
-from sqlalchemy.orm import selectinload, aliased, joinedload
+from sqlalchemy.orm import selectinload, aliased
 
 from app.database import Product
 from app.database import SessionDep, StepDefinition
@@ -190,32 +189,37 @@ class InventoryRepository(GetBackNextIdMixin[Inventory]):
         result = await self.session.scalars(stmt)
         return list(result.all())
 
-
     async def compare(self, inventory_id: int) -> list[dict]:
-        # 1. Загружаем строки инвентаризации
+        inventory = await self.get_inventory_by_id(inventory_id)
+
         stmt_items = (
             select(InventoryItem)
             .where(InventoryItem.inventory_id == inventory_id)
-            .options(joinedload(InventoryItem.step_definition))
+            .options(
+                selectinload(InventoryItem.step_definition).selectinload(
+                    StepDefinition.template
+                ),
+                selectinload(InventoryItem.step_definition).selectinload(
+                    StepDefinition.work_process
+                ),
+            )
         )
         items = (await self.session.scalars(stmt_items)).all()
         if not items:
             return []
 
-        snapshot_at = max(item.scanned_at for item in items)
-        scanned_serials = {item.serial_number for item in items}
+        snapshot_at = inventory.completed_at or max(item.scanned_at for item in items)
 
-        scanned_items_by_step: dict[int, dict[str, InventoryItem]] = defaultdict(dict)
-        for item in items:
-            scanned_items_by_step[item.step_definition_id][item.serial_number] = item
+        # Собираем данные по инвентаризации в простой маппинг по серийнику
+        scanned_items_by_serial = {item.serial_number: item for item in items}
+        scanned_serials = set(scanned_items_by_serial.keys())
 
         ps_alias = aliased(ProductStep)
         sd_alias = aliased(StepDefinition)
         pkg_alias = aliased(Packaging)
 
-        # Последний завершенный шаг на момент snapshot_at
-        last_step_id_subq = (
-            select(ps_alias.id)
+        last_step_def_id_subq = (
+            select(ps_alias.step_definition_id)
             .join(sd_alias, sd_alias.id == ps_alias.step_definition_id)
             .where(ps_alias.product_id == Product.id)
             .where(ps_alias.status == StepStatus.done)
@@ -231,13 +235,6 @@ class InventoryRepository(GetBackNextIdMixin[Inventory]):
             .scalar_subquery()
         )
 
-        last_step_def_id_subq = (
-            select(ps_alias.step_definition_id)
-            .where(ps_alias.id == last_step_id_subq)
-            .scalar_subquery()
-        )
-
-        # Упакован ли продукт на snapshot_at
         is_packaged_at_snapshot_expr = (
             select(1)
             .where(pkg_alias.id == Product.packaging_id)
@@ -247,109 +244,104 @@ class InventoryRepository(GetBackNextIdMixin[Inventory]):
             .exists()
         )
 
-        # 2. Берем:
-        # - все продукты из инвентаризации
-        # - все продукты, не упакованные на snapshot_at
-        product_filters = [~is_packaged_at_snapshot_expr]
+        # Условие выборки: продукт не упакован ИЛИ отсканирован в ходе этой инвентаризации
+        condition = ~is_packaged_at_snapshot_expr
         if scanned_serials:
-            product_filters.append(Product.serial_number.in_(scanned_serials))
+            condition = or_(condition, Product.serial_number.in_(scanned_serials))
 
         stmt_products = select(
             Product,
             last_step_def_id_subq.label("current_step_definition_id"),
             is_packaged_at_snapshot_expr.label("is_packaged_at_snapshot"),
-        ).where(or_(*product_filters))
+        ).where(condition)
+
         db_rows = (await self.session.execute(stmt_products)).all()
 
-        # 3. Разделяем:
-        # - все продукты из инвентаризации по serial
-        # - учетные продукты (не упакованные на snapshot_at) по этапу
         products_from_inventory_by_serial: dict[str, Product] = {}
-        accounting_products_by_step: dict[int, dict[str, Product]] = defaultdict(dict)
+        accounting_info_by_serial: dict[str, tuple[Product, int]] = {}
+        all_product_ids: set[int] = set()
 
         for product, current_step_definition_id, is_packaged_at_snapshot in db_rows:
+            all_product_ids.add(product.id)
+
             if product.serial_number in scanned_serials:
                 products_from_inventory_by_serial[product.serial_number] = product
 
             if not is_packaged_at_snapshot and current_step_definition_id is not None:
-                accounting_products_by_step[current_step_definition_id][
-                    product.serial_number
-                ] = product
+                accounting_info_by_serial[product.serial_number] = (
+                    product,
+                    current_step_definition_id,
+                )
 
-        # 4. Все step_definition_id из физики и учета
-        all_step_ids = set(scanned_items_by_step.keys()) | set(
-            accounting_products_by_step.keys()
-        )
-        if not all_step_ids:
-            return []
-
-        stmt_step_defs = (
-            select(StepDefinition)
-            .where(StepDefinition.id.in_(all_step_ids))
-            .options(
-                joinedload(StepDefinition.template),
-                joinedload(StepDefinition.work_process),
+        product_step_dates: dict[tuple[int, int], datetime] = {}
+        if all_product_ids:
+            stmt_steps_dates = select(
+                ProductStep.product_id,
+                ProductStep.step_definition_id,
+                ProductStep.performed_at,
+            ).where(
+                ProductStep.product_id.in_(all_product_ids),
+                ProductStep.status == StepStatus.done,
+                ProductStep.performed_at.is_not(None),
+                ProductStep.performed_at <= snapshot_at,
             )
-        )
-        step_defs = await self.session.scalars(stmt_step_defs)
-        step_def_map = {sd.id: sd for sd in step_defs.unique().all()}
+            steps_rows = (await self.session.execute(stmt_steps_dates)).all()
+            for p_id, sd_id, perf_at in steps_rows:
+                product_step_dates[(p_id, sd_id)] = perf_at
 
-        def make_item(product: Product, step_def: StepDefinition) -> dict:
-            return {
-                "id": product.id,
-                "serial_number": product.serial_number,
-                "status": product.status,
-                "step_definition": step_def,
-            }
+        # Собираем все уникальные ID этапов из обоих источников для одного запроса
+        all_step_ids = {
+            item.step_definition_id
+            for item in items
+            if item.step_definition_id is not None
+        } | {step_id for _, step_id in accounting_info_by_serial.values()}
 
+        step_def_map = {}
+        if all_step_ids:
+            stmt_step_defs = (
+                select(StepDefinition)
+                .where(StepDefinition.id.in_(all_step_ids))
+                .options(
+                    selectinload(StepDefinition.template),
+                    selectinload(StepDefinition.work_process),
+                )
+            )
+            step_defs = await self.session.scalars(stmt_step_defs)
+            step_def_map = {sd.id: sd for sd in step_defs.unique().all()}
+
+        all_serials = scanned_serials | set(accounting_info_by_serial.keys())
         results = []
 
-        for step_def_id in sorted(
-            all_step_ids,
-            key=lambda sid: (
-                (
-                    step_def_map[sid].work_process.id
-                    if sid in step_def_map and step_def_map[sid].work_process
-                    else 0
-                ),
-                step_def_map[sid].order if sid in step_def_map else 0,
-                sid,
-            ),
-        ):
-            step_def = step_def_map.get(step_def_id)
-            if step_def is None:
-                continue
+        for serial in sorted(all_serials):
+            scanned_item = scanned_items_by_serial.get(serial)
+            accounting_info = accounting_info_by_serial.get(serial)
 
-            scanned_map = scanned_items_by_step.get(step_def_id, {})
-            scanned_serials_step = set(scanned_map.keys())
+            # Вытаскиваем этап по инвентаризации
+            inventory_step_def = None
+            if scanned_item and scanned_item.step_definition_id:
+                inventory_step_def = step_def_map.get(scanned_item.step_definition_id)
 
-            accounting_map = accounting_products_by_step.get(step_def_id, {})
-            accounting_serials_step = set(accounting_map.keys())
+            accounting_step_def = None
+            perf_at = None
 
-            matched_serials = scanned_serials_step & accounting_serials_step
-            missing_serials = accounting_serials_step - scanned_serials_step
-            unexpected_serials = scanned_serials_step - accounting_serials_step
+            if accounting_info:
+                product, acc_step_id = accounting_info
+                accounting_step_def = step_def_map.get(acc_step_id)
+                perf_at = product_step_dates.get((product.id, acc_step_id))
+            else:
+                # Если товара нет в учёте на каком-либо этапе (или он упакован),
+                # он гарантированно берется из отсканированных (через or_)
+                product = products_from_inventory_by_serial.get(serial)
 
-            matched = [
-                make_item(accounting_map[s], step_def) for s in sorted(matched_serials)
-            ]
-
-            missing = [
-                make_item(accounting_map[s], step_def) for s in sorted(missing_serials)
-            ]
-
-            unexpected = [
-                make_item(products_from_inventory_by_serial[s], step_def)
-                for s in sorted(unexpected_serials)
-            ]
-
+            # product.id if product else None оставлено для сверхнадежности на случай фантомных записей
             results.append(
                 {
-                    "db_count": len(accounting_serials_step),
-                    "scanned_count": len(scanned_serials_step),
-                    "matched": matched,
-                    "missing": missing,
-                    "unexpected": unexpected,
+                    "id": product.id if product else None,
+                    "serial_number": serial,
+                    "status": product.status if product else None,
+                    "inventory_step_definition": inventory_step_def,
+                    "accounting_step_definition": accounting_step_def,
+                    "performed_at": perf_at,
                 }
             )
 
