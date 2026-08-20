@@ -175,24 +175,23 @@ async def get_period_statistics(
         if employee.role not in [Role.admin, Role.master]:
             raise HTTPException(status_code=403, detail="Недостаточно прав")
 
-        # 1. Получаем агрегированную статистику по завершенным продуктам (вместо списка продуктов)
+        # 1. Агрегированная статистика по завершенным продуктам
         finished_products_data = await repo.get_finished_products_stats_by_period(
             date_from, date_to
         )
 
-        # 2. Получаем агрегированную статистику по этапам
+        # 2. Агрегированная статистика по выполненным этапам
         steps_data = await repo.get_completed_steps_stats_by_period(date_from, date_to)
 
         return PeriodStatisticsRead(
-            # Мапим словари в новые ProcessCountStatRead
             finished_products=[
                 ProcessCountStatRead(**item) for item in finished_products_data
             ],
             total_steps=[StepCountStatRead(**item) for item in steps_data],
         )
-    except HTTPException as exc:
-        raise exc
-    except Exception as e:
+    except HTTPException:
+        raise
+    except Exception:
         raise HTTPException(
             status_code=500,
             detail="Произошла ошибка при получении статистики",

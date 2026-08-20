@@ -20,6 +20,7 @@ from app.database.models.product import ProductStatus
 from app.database.models.product_step import StepStatus
 from app.database.schemas.product import ProductCreate
 from database import Employee
+from database.models import SizeType
 
 
 def get_product_repo(session: SessionDep) -> "ProductRepository":
@@ -398,11 +399,13 @@ class ProductRepository(GetBackNextIdMixin[Product]):
     async def get_completed_steps_stats_by_period(
         self, date_from: date_type, date_to: date_type
     ):
-        """Считает количество закрытых этапов по процессам и сотрудникам за период."""
+        """Считает количество закрытых этапов по процессам, типоразмерам и сотрудникам за период."""
         stmt = (
             select(
                 Product.process_id,
                 Process.name.label("process_name"),
+                Process.size_type_id,
+                SizeType.name.label("size_type_name"),
                 ProductStep.step_definition_id,
                 StepDefinition.order.label("order"),
                 StepTemplate.name.label("step_name"),
@@ -413,6 +416,7 @@ class ProductRepository(GetBackNextIdMixin[Product]):
             .select_from(ProductStep)
             .join(Product, Product.id == ProductStep.product_id)
             .join(Process, Process.id == Product.process_id)
+            .outerjoin(SizeType, SizeType.id == Process.size_type_id)
             .join(StepDefinition, StepDefinition.id == ProductStep.step_definition_id)
             .join(StepTemplate, StepTemplate.id == StepDefinition.template_id)
             .join(Employee, Employee.id == ProductStep.performed_by_id)
@@ -423,6 +427,8 @@ class ProductRepository(GetBackNextIdMixin[Product]):
             .group_by(
                 Product.process_id,
                 Process.name,
+                Process.size_type_id,
+                SizeType.name,
                 ProductStep.step_definition_id,
                 StepDefinition.order,
                 StepTemplate.name,
