@@ -13,6 +13,7 @@ from app.database.crud.processes import ProcessRepository, get_process_repo
 from app.database.crud.products import ProductRepository, get_product_repo
 from app.database.models.employee import Role
 from app.database.models.product import ProductStatus
+from app.database.schemas.daily_plan_step import DailyPlanStepRead
 from app.database.schemas.employee import EmployeeRead
 from app.database.schemas.product import (
     ProductRead,
@@ -24,6 +25,7 @@ from app.database.schemas.statistics import (
     PeriodStatisticsRead,
     StepCountStatRead,
     ProcessCountStatRead,
+    EmployeePlanStatRead,
 )
 
 router = APIRouter(
@@ -169,13 +171,13 @@ async def get_period_statistics(
     date_from: date,
     date_to: date,
     repo: Annotated[ProductRepository, Depends(get_product_repo)],
+    daily_plan_repo: Annotated[DailyPlanRepository, Depends(get_daily_plan_repo)],
     employee: Annotated[EmployeeRead, Depends(get_current_employee)],
 ):
     try:
         employee_id = None
         finished_products_data = []
 
-        # Завершенные продукты запрашиваются только для админов и мастеров
         if employee.role in [Role.admin, Role.master]:
             finished_products_data = await repo.get_finished_products_stats_by_period(
                 date_from=date_from,
@@ -184,8 +186,13 @@ async def get_period_statistics(
         else:
             employee_id = employee.id
 
-        # Статистика по выполненным этапам (с фильтрацией по worker, если не админ/мастер)
         steps_data = await repo.get_completed_steps_stats_by_period(
+            date_from=date_from,
+            date_to=date_to,
+            employee_id=employee_id,
+        )
+
+        employee_plans_data = await daily_plan_repo.get_employee_plan_stats_by_period(
             date_from=date_from,
             date_to=date_to,
             employee_id=employee_id,
@@ -196,6 +203,15 @@ async def get_period_statistics(
                 ProcessCountStatRead(**item) for item in finished_products_data
             ],
             total_steps=[StepCountStatRead(**item) for item in steps_data],
+            employee_plans=[
+                EmployeePlanStatRead(
+                    employee_id=item["employee_id"],
+                    employee_name=item["employee_name"],
+                    working_days=item["working_days"],
+                    steps=[DailyPlanStepRead.model_validate(s) for s in item["steps"]],
+                )
+                for item in employee_plans_data
+            ],
         )
     except HTTPException:
         raise
@@ -204,6 +220,7 @@ async def get_period_statistics(
             status_code=500,
             detail="Произошла ошибка при получении статистики",
         )
+
 
 @router.get(
     "/by-step-employee-day",

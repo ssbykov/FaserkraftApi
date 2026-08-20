@@ -1,5 +1,7 @@
 from pydantic import BaseModel
 
+from app.database.schemas.daily_plan_step import DailyPlanStepRead
+
 
 class StepCountStatRead(BaseModel):
     process_id: int
@@ -20,6 +22,14 @@ class ProcessCountStatRead(BaseModel):
     count: int
 
 
+class EmployeePlanStatRead(BaseModel):
+    employee_id: int
+    employee_name: str
+    working_days: int
+    steps: list[DailyPlanStepRead]
+
+
 class PeriodStatisticsRead(BaseModel):
     finished_products: list[ProcessCountStatRead]
     total_steps: list[StepCountStatRead]
+    employee_plans: list[EmployeePlanStatRead]

@@ -3,7 +3,7 @@ from typing import Sequence
 
 from sqlalchemy import select, exists
 from sqlalchemy.exc import NoResultFound
-from sqlalchemy.orm import joinedload, Mapped
+from sqlalchemy.orm import joinedload
 
 from app.database import DailyPlan, SessionDep, StepDefinition, ProductStep
 from app.database.crud.mixines import GetBackNextIdMixin
@@ -238,3 +238,68 @@ class DailyPlanRepository(GetBackNextIdMixin[DailyPlan]):
                     )
 
         return await self._handle_operation(operation, to_date)
+
+    async def get_employee_plan_stats_by_period(
+        self,
+        date_from: date_type,
+        date_to: date_type,
+        employee_id: int | None = None,
+    ) -> list[dict]:
+        """
+        Возвращает по каждому сотруднику:
+        - количество рабочих дней (дней с планом) в периоде
+        - суммарный planned_quantity за период
+        - список DailyPlanStep за период (для детализации)
+        """
+        stmt = (
+            select(self.model)
+            .options(
+                joinedload(self.model.employee),
+                joinedload(self.model.steps)
+                .joinedload(DailyPlanStep.step_definition)
+                .joinedload(StepDefinition.template),
+            )
+            .where(
+                self.model.date >= date_from,
+                self.model.date <= date_to,
+            )
+            # только планы с хотя бы одним шагом
+            .where(
+                exists(
+                    select(DailyPlanStep.id).where(
+                        DailyPlanStep.daily_plan_id == self.model.id
+                    )
+                )
+            )
+        )
+
+        if employee_id is not None:
+            stmt = stmt.where(self.model.employee_id == employee_id)
+
+        result = await self.session.execute(stmt)
+        plans: Sequence[DailyPlan] = result.unique().scalars().all()
+
+        # Группируем по сотруднику
+        from collections import defaultdict
+
+        grouped: dict[int, dict] = defaultdict(
+            lambda: {
+                "employee_name": "",
+                "working_days": 0,
+                "steps": [],
+            }
+        )
+
+        for plan in plans:
+            emp_id = plan.employee_id
+            grouped[emp_id]["employee_name"] = plan.employee.name
+            grouped[emp_id]["working_days"] += 1
+            grouped[emp_id]["steps"].extend(plan.steps)
+
+        return [
+            {
+                "employee_id": emp_id,
+                **data,
+            }
+            for emp_id, data in grouped.items()
+        ]
