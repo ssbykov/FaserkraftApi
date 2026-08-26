@@ -30,6 +30,7 @@ class EmployeePlanStatRead(BaseModel):
 
 
 class PeriodStatisticsRead(BaseModel):
-    finished_products: list[ProcessCountStatRead]
-    total_steps: list[StepCountStatRead]
-    employee_plans: list[EmployeePlanStatRead]
+    total_working_days: int = 0
+    finished_products: list[ProcessCountStatRead] = []
+    total_steps: list[StepCountStatRead] = []
+    employee_plans: list[EmployeePlanStatRead] = []

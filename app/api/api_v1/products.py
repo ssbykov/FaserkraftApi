@@ -186,6 +186,11 @@ async def get_period_statistics(
         else:
             employee_id = employee.id
 
+        total_working_days = await daily_plan_repo.get_working_days_count_by_period(
+            date_from=date_from,
+            date_to=date_to,
+        )
+
         steps_data = await repo.get_completed_steps_stats_by_period(
             date_from=date_from,
             date_to=date_to,
@@ -199,6 +204,7 @@ async def get_period_statistics(
         )
 
         return PeriodStatisticsRead(
+            total_working_days=total_working_days,
             finished_products=[
                 ProcessCountStatRead(**item) for item in finished_products_data
             ],

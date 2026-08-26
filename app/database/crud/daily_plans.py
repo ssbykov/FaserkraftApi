@@ -1,7 +1,7 @@
 from datetime import date as date_type
 from typing import Sequence
 
-from sqlalchemy import select, exists
+from sqlalchemy import select, exists, func, distinct
 from sqlalchemy.exc import NoResultFound
 from sqlalchemy.orm import joinedload
 
@@ -303,3 +303,30 @@ class DailyPlanRepository(GetBackNextIdMixin[DailyPlan]):
             }
             for emp_id, data in grouped.items()
         ]
+
+    async def get_working_days_count_by_period(
+        self,
+        date_from: date_type,
+        date_to: date_type,
+        employee_id: int | None = None,
+    ) -> int:
+        """
+        Возвращает общее количество рабочих дней за указанный период.
+        День считается рабочим, если на эту дату есть хотя бы один план
+        с ненулевым количеством этапов (шагов).
+        """
+        stmt = select(func.count(distinct(self.model.date))).where(
+            self.model.date >= date_from,
+            self.model.date <= date_to,
+            exists(
+                select(DailyPlanStep.id).where(
+                    DailyPlanStep.daily_plan_id == self.model.id
+                )
+            ),
+        )
+
+        if employee_id is not None:
+            stmt = stmt.where(self.model.employee_id == employee_id)
+
+        count = await self.session.scalar(stmt)
+        return count or 0
