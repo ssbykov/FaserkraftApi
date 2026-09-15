@@ -4,7 +4,7 @@ from sqlalchemy.orm import selectinload
 
 from app.database import Employee, SessionDep
 from app.database.crud.mixines import GetBackNextIdMixin
-from app.database.models import Device, User
+from app.database.models import Device
 from database.schemas.employee import EmployeeRead
 
 
