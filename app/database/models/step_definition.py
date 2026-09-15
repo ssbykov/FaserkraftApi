@@ -1,43 +1,54 @@
-from sqlalchemy import Column, Integer, ForeignKey
-from sqlalchemy.orm import relationship
+from typing import TYPE_CHECKING
+
+from sqlalchemy import ForeignKey
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import BaseWithId
+
+if TYPE_CHECKING:
+    from .daily_plan_step import DailyPlanStep
+    from .employee_norm_calculation import EmployeeNormCalculation
+    from .process import Process
+    from .product_step import ProductStep
+    from .step_template import StepTemplate
 
 
 class StepDefinition(BaseWithId):
     __tablename__ = "step_definitions"
 
-    process_id = Column(ForeignKey("processes.id"), nullable=False)
-    template_id = Column(ForeignKey("step_templates.id"), nullable=False)
-    order = Column(Integer, nullable=False)
+    process_id: Mapped[int] = mapped_column(ForeignKey("processes.id"))
+    template_id: Mapped[int] = mapped_column(ForeignKey("step_templates.id"))
+    order: Mapped[int]
 
-    template = relationship(
-        "StepTemplate",
+    template: Mapped["StepTemplate"] = relationship(
         back_populates="definitions",
         lazy="selectin",
     )
 
-    product_steps = relationship(
-        "ProductStep",
+    product_steps: Mapped[list["ProductStep"]] = relationship(
         back_populates="step_definition",
         lazy="selectin",
     )
-    work_process = relationship(
-        "Process",
+    work_process: Mapped["Process"] = relationship(
         back_populates="steps",
         lazy="selectin",
     )
 
-    steps = relationship(
-        "DailyPlanStep",
+    steps: Mapped[list["DailyPlanStep"]] = relationship(
         back_populates="step_definition",
         lazy="selectin",
         cascade="all, delete-orphan",
     )
 
-    def __repr__(self):
+    norm_calculations: Mapped[list["EmployeeNormCalculation"]] = relationship(
+        back_populates="step_definition",
+        lazy="selectin",
+        cascade="all, delete-orphan",
+    )
+
+    def __repr__(self) -> str:
         return f"{self.order}: {self.template}"
 
     @property
-    def full_name(self):
+    def full_name(self) -> str:
         return f"{self.work_process}: {self.template}"
