@@ -5,6 +5,7 @@ from .daily_plan import DailyPlan
 from .daily_plan_step import DailyPlanStep
 from .device import Device
 from .employee import Employee
+from .employee_norm_calculation import EmployeeNormCalculation
 from .inventory import Inventory, InventoryItem
 from .order import Order, OrderItem
 from .packaging_box import Packaging
@@ -27,6 +28,7 @@ __all__ = [
     "ProductStep",
     "StepTemplate",
     "StepDefinition",
+    "EmployeeNormCalculation",
     "DailyPlan",
     "AccessToken",
     "Base",
