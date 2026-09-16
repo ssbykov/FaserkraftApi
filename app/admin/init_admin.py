@@ -35,6 +35,7 @@ from .model_views import (
     OrderAdmin,
     InventoryAdmin,
     InventoryItemAdmin,
+    EmployeeNormCalculationAdmin,
 )
 from .model_views.size_type import SizeTypeAdmin
 
@@ -50,6 +51,7 @@ async def init_admin(app: Any) -> "NewAdmin":
     admin.add_view(ProcessAdmin)
     admin.add_view(SizeTypeAdmin)
     admin.add_view(StepDefinitionAdmin)
+    admin.add_view(EmployeeNormCalculationAdmin)
     admin.add_view(StepTemplateAdmin)
     admin.add_view(ProductAdmin)
     admin.add_view(PackagingAdmin)

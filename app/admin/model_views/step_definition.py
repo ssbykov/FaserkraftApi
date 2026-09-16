@@ -16,6 +16,7 @@ class StepDefinitionAdmin(
         StepDefinition.work_process: "Процесс",
         StepDefinition.template: "Шаблон",
         StepDefinition.order: "Порядок",
+        StepDefinition.norm_calculations: "Расчеты норм выработки",
     }
 
     column_list = (
@@ -27,6 +28,7 @@ class StepDefinitionAdmin(
         "work_process",
         "template",
         "order",
+        "norm_calculations",
     )
 
     form_args = {
