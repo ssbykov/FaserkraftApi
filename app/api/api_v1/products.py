@@ -1,5 +1,7 @@
+from collections import defaultdict
 from datetime import date
 from datetime import date as date_type
+from decimal import Decimal
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -7,13 +9,20 @@ from sqlalchemy.exc import IntegrityError
 from starlette import status
 
 from app.api.api_v1.dependencies import get_current_employee, require_admin_or_master
+from app.api.services.norm_calculation import (
+    build_norm_intervals,
+    calculate_amount_for_step,
+)
 from app.core import settings
 from app.database.crud.daily_plans import DailyPlanRepository, get_daily_plan_repo
+from app.database.crud.employee_norm_calculations import (
+    get_employee_norm_calculation_repo,
+    EmployeeNormCalculationRepository,
+)
 from app.database.crud.processes import ProcessRepository, get_process_repo
 from app.database.crud.products import ProductRepository, get_product_repo
 from app.database.models.employee import Role
 from app.database.models.product import ProductStatus
-from app.database.schemas.daily_plan_step import DailyPlanStepRead
 from app.database.schemas.employee import EmployeeRead
 from app.database.schemas.product import (
     ProductRead,
@@ -26,7 +35,9 @@ from app.database.schemas.statistics import (
     StepCountStatRead,
     ProcessCountStatRead,
     EmployeePlanStatRead,
+    EmployeeEarningsRead,
 )
+from app.database.schemas.daily_plan_step import DailyPlanStepRead
 
 router = APIRouter(
     tags=["Products"],
@@ -172,6 +183,9 @@ async def get_period_statistics(
     date_to: date,
     repo: Annotated[ProductRepository, Depends(get_product_repo)],
     daily_plan_repo: Annotated[DailyPlanRepository, Depends(get_daily_plan_repo)],
+    norm_calc_repo: Annotated[
+        EmployeeNormCalculationRepository, Depends(get_employee_norm_calculation_repo)
+    ],
     employee: Annotated[EmployeeRead, Depends(get_current_employee)],
 ):
     try:
@@ -189,6 +203,7 @@ async def get_period_statistics(
         total_working_days = await daily_plan_repo.get_working_days_count_by_period(
             date_from=date_from,
             date_to=date_to,
+            employee_id=employee_id,
         )
 
         steps_data = await repo.get_completed_steps_stats_by_period(
@@ -197,10 +212,78 @@ async def get_period_statistics(
             employee_id=employee_id,
         )
 
+        daily_rows = await repo.get_completed_steps_by_day(
+            date_from=date_from,
+            date_to=date_to,
+            employee_id=employee_id,
+        )
+        working_days_map = await daily_plan_repo.get_working_days_by_employee(
+            date_from=date_from,
+            date_to=date_to,
+            employee_id=employee_id,
+        )
+
+        step_definition_ids = {row["step_definition_id"] for row in daily_rows}
+        norms_by_step = await norm_calc_repo.get_norms_for_steps(step_definition_ids)
+
+        daily_counts_map: dict[tuple[int, int], dict[date_type, int]] = defaultdict(dict)
+        for row in daily_rows:
+            key = (row["employee_id"], row["step_definition_id"])
+            daily_counts_map[key][row["day"]] = row["count"]
+
+        employee_step_amounts: dict[tuple[int, int], Decimal] = {}
+        for key, daily_counts in daily_counts_map.items():
+            emp_id, step_def_id = key
+            norms = norms_by_step.get(step_def_id, [])
+            intervals = build_norm_intervals(norms, date_from, date_to)
+            employee_working_days = working_days_map.get(emp_id, set())
+            amount = calculate_amount_for_step(
+                intervals, daily_counts, employee_working_days
+            )
+            employee_step_amounts[key] = amount
+
+        for item in steps_data:
+            key = (item["employee_id"], item["step_definition_id"])
+            item["total_amount"] = employee_step_amounts.get(key, Decimal("0"))
+
         employee_plans_data = await daily_plan_repo.get_employee_plan_stats_by_period(
             date_from=date_from,
             date_to=date_to,
             employee_id=employee_id,
+        )
+
+        amounts_by_employee: dict[int, Decimal] = defaultdict(lambda: Decimal("0"))
+        for (emp_id, _), amount in employee_step_amounts.items():
+            amounts_by_employee[emp_id] += amount
+
+        employee_plans = [
+            EmployeePlanStatRead(
+                employee_id=item["employee_id"],
+                employee_name=item["employee_name"],
+                working_days=item["working_days"],
+                steps=[DailyPlanStepRead.model_validate(s) for s in item["steps"]],
+            )
+            for item in employee_plans_data
+        ]
+
+        employee_earnings = [
+            EmployeeEarningsRead(
+                employee_id=item["employee_id"],
+                employee_name=item["employee_name"],
+                total_earned=amounts_by_employee.get(
+                    item["employee_id"], Decimal("0")
+                ).quantize(Decimal("0.01")),
+                steps=[
+                    StepCountStatRead(**s)
+                    for s in steps_data
+                    if s["employee_id"] == item["employee_id"]
+                ],
+            )
+            for item in employee_plans_data
+        ]
+
+        total_earned_all = sum(amounts_by_employee.values(), Decimal("0")).quantize(
+            Decimal("0.01")
         )
 
         return PeriodStatisticsRead(
@@ -209,15 +292,9 @@ async def get_period_statistics(
                 ProcessCountStatRead(**item) for item in finished_products_data
             ],
             total_steps=[StepCountStatRead(**item) for item in steps_data],
-            employee_plans=[
-                EmployeePlanStatRead(
-                    employee_id=item["employee_id"],
-                    employee_name=item["employee_name"],
-                    working_days=item["working_days"],
-                    steps=[DailyPlanStepRead.model_validate(s) for s in item["steps"]],
-                )
-                for item in employee_plans_data
-            ],
+            employee_plans=employee_plans,
+            employee_earnings=employee_earnings,
+            total_earned_all=total_earned_all,
         )
     except HTTPException:
         raise
@@ -226,7 +303,6 @@ async def get_period_statistics(
             status_code=500,
             detail="Произошла ошибка при получении статистики",
         )
-
 
 @router.get(
     "/by-step-employee-day",
