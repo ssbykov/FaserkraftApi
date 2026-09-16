@@ -1,6 +1,6 @@
 import json
 
-from app.database.models.app_update import ReleaseFileData
+from database.schemas.app_update import ReleaseFileData
 from core import settings
 
 
