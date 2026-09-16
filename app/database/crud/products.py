@@ -449,6 +449,43 @@ class ProductRepository(GetBackNextIdMixin[Product]):
         result = await self.session.execute(stmt)
         return [dict(row._mapping) for row in result.all()]
 
+    async def get_completed_steps_by_day(
+        self,
+        date_from: date_type,
+        date_to: date_type,
+        employee_id: int | None = None,
+    ) -> list[dict]:
+        """
+        Возвращает по каждому (employee_id, step_definition_id, day)
+        количество фактически закрытых шагов за период. Используется для
+        точного посчета выработки в рублях: позволяет сопоставить каждый
+        день с действовавшей на тот момент нормой (EmployeeNormCalculation)
+        и посчитать среднедневную выработку по интервалам действия нормы.
+        """
+        stmt = select(
+            ProductStep.performed_by_id.label("employee_id"),
+            ProductStep.step_definition_id,
+            func.date(ProductStep.performed_at).label("day"),
+            func.count(ProductStep.id).label("count"),
+        ).where(
+            ProductStep.status == StepStatus.done,
+            ProductStep.performed_at.is_not(None),
+            func.date(ProductStep.performed_at) >= date_from,
+            func.date(ProductStep.performed_at) <= date_to,
+        )
+
+        if employee_id is not None:
+            stmt = stmt.where(ProductStep.performed_by_id == employee_id)
+
+        stmt = stmt.group_by(
+            ProductStep.performed_by_id,
+            ProductStep.step_definition_id,
+            func.date(ProductStep.performed_at),
+        )
+
+        result = await self.session.execute(stmt)
+        return [dict(row._mapping) for row in result.all()]
+
     async def list_by_process_and_last_completed_step(
         self,
         *,
