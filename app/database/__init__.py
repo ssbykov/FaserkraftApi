@@ -1,3 +1,4 @@
+from .db import db_helper, SessionDep
 from .models import (
     BaseWithId,
     Base,
@@ -10,10 +11,8 @@ from .models import (
     StepTemplate,
     StepDefinition,
     DailyPlan,
+    EmployeeNormCalculation,
 )
-from .db import db_helper, SessionDep
-
-
 from .schemas import (
     BaseSchema,
 )
@@ -33,4 +32,5 @@ __all__ = [
     "SessionDep",
     "AccessToken",
     "BaseSchema",
+    "EmployeeNormCalculation",
 ]

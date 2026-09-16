@@ -3,6 +3,7 @@ from .daily_plan import DailyPlanAdmin
 from .daily_plan_step import DailyPlanStepAdmin
 from .device import DeviceAdmin
 from .employee import EmployeeAdmin
+from .employee_norm_calculation import EmployeeNormCalculationAdmin
 from .packaging_box import PackagingAdmin
 from .process import ProcessAdmin
 from .product import ProductAdmin
@@ -32,4 +33,5 @@ __all__ = [
     "OrderAdmin",
     "InventoryAdmin",
     "InventoryItemAdmin",
+    "EmployeeNormCalculationAdmin"
 ]
