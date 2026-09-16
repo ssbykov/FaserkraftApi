@@ -1,3 +1,4 @@
+from collections import defaultdict
 from datetime import date as date_type
 from typing import Sequence
 
@@ -330,3 +331,39 @@ class DailyPlanRepository(GetBackNextIdMixin[DailyPlan]):
 
         count = await self.session.scalar(stmt)
         return count or 0
+
+    async def get_working_days_by_employee(
+        self,
+        date_from: date_type,
+        date_to: date_type,
+        employee_id: int | None = None,
+    ) -> dict[int, set[date_type]]:
+        """
+        Возвращает по каждому employee_id множество дат, когда у него
+        был план (DailyPlan с хотя бы одним DailyPlanStep) в периоде.
+        Не привязано к конкретному step_definition_id.
+        """
+        stmt = (
+            select(self.model.employee_id, self.model.date)
+            .where(
+                self.model.date >= date_from,
+                self.model.date <= date_to,
+                exists(
+                    select(DailyPlanStep.id).where(
+                        DailyPlanStep.daily_plan_id == self.model.id
+                    )
+                ),
+            )
+        )
+
+        if employee_id is not None:
+            stmt = stmt.where(self.model.employee_id == employee_id)
+
+        result = await self.session.execute(stmt)
+        rows = result.all()
+
+        working_days: dict[int, set[date_type]] = defaultdict(set)
+        for emp_id, day in rows:
+            working_days[emp_id].add(day)
+
+        return working_days
