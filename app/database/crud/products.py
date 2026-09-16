@@ -1,4 +1,11 @@
-from datetime import date as date_type, timedelta
+from datetime import date as date_type
+from datetime import datetime, time, timedelta
+from zoneinfo import ZoneInfo
+
+from starlette import status
+
+PRODUCTION_TIMEZONE = ZoneInfo("Europe/Moscow")
+
 from typing import Optional
 
 from fastapi import HTTPException
@@ -25,6 +32,36 @@ from database.models import SizeType
 
 def get_product_repo(session: SessionDep) -> "ProductRepository":
     return ProductRepository(session)
+
+
+def _make_datetime_period(
+    date_from: date_type,
+    date_to: date_type,
+) -> tuple[datetime, datetime]:
+    """
+    Преобразует календарный диапазон в полуоткрытый интервал datetime:
+    [date_from 00:00:00; date_to + 1 день 00:00:00).
+
+    Все даты трактуются в производственной timezone.
+    """
+    if date_from > date_to:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="date_from не может быть позже date_to",
+        )
+
+    period_start = datetime.combine(
+        date_from,
+        time.min,
+        tzinfo=PRODUCTION_TIMEZONE,
+    )
+    period_end = datetime.combine(
+        date_to + timedelta(days=1),
+        time.min,
+        tzinfo=PRODUCTION_TIMEZONE,
+    )
+
+    return period_start, period_end
 
 
 class ProductRepository(GetBackNextIdMixin[Product]):
@@ -347,11 +384,16 @@ class ProductRepository(GetBackNextIdMixin[Product]):
         self,
         date_from: date_type,
         date_to: date_type,
-    ):
+    ) -> list[dict]:
         """
-        Считает количество завершённых продуктов по процессам, у которых последний этап
-        был выполнен в указанный период.
+        Считает количество завершённых продуктов по процессам, у которых
+        последний технологический этап был выполнен в указанном периоде.
+
+        Период интерпретируется в производственной timezone Europe/Moscow:
+        [date_from 00:00:00; date_to + 1 день 00:00:00).
         """
+        period_start, period_end = _make_datetime_period(date_from, date_to)
+
         not_done_exists = (
             select(ProductStep.id)
             .where(
@@ -361,25 +403,26 @@ class ProductRepository(GetBackNextIdMixin[Product]):
             .exists()
         )
 
-        last_step_date_subq = (
-            select(func.date(ProductStep.performed_at))
-            .join(StepDefinition, StepDefinition.id == ProductStep.step_definition_id)
+        last_step_performed_at_subq = (
+            select(ProductStep.performed_at)
+            .join(
+                StepDefinition,
+                StepDefinition.id == ProductStep.step_definition_id,
+            )
             .where(
                 ProductStep.product_id == Product.id,
                 ProductStep.status == StepStatus.done,
                 ProductStep.performed_at.is_not(None),
             )
-            .order_by(desc(StepDefinition.order))
+            .order_by(
+                StepDefinition.order.desc(),
+                ProductStep.performed_at.desc(),
+                ProductStep.id.desc(),
+            )
             .limit(1)
+            .correlate(Product)
             .scalar_subquery()
         )
-
-        conditions = [
-            Product.status == ProductStatus.normal,
-            ~not_done_exists,
-            last_step_date_subq >= date_from,
-            last_step_date_subq <= date_to,
-        ]
 
         stmt = (
             select(
@@ -389,7 +432,13 @@ class ProductRepository(GetBackNextIdMixin[Product]):
             )
             .select_from(Product)
             .join(Process, Process.id == Product.process_id)
-            .where(*conditions)
+            .where(
+                Product.status == ProductStatus.normal,
+                Product.packaging_id.is_(None),
+                ~not_done_exists,
+                last_step_performed_at_subq >= period_start,
+                last_step_performed_at_subq < period_end,
+            )
             .group_by(Process.id, Process.name)
         )
 
@@ -401,8 +450,16 @@ class ProductRepository(GetBackNextIdMixin[Product]):
         date_from: date_type,
         date_to: date_type,
         employee_id: int | None = None,
-    ):
-        """Считает количество закрытых этапов по процессам, типоразмерам и сотрудникам за период."""
+    ) -> list[dict]:
+        """
+        Возвращает агрегированную статистику выполненных этапов за период
+        по процессу, типоразмеру, этапу и сотруднику.
+
+        Период задаётся в московском производственном времени и имеет вид:
+        [date_from 00:00; date_to + 1 день 00:00).
+        """
+        period_start, period_end = _make_datetime_period(date_from, date_to)
+
         stmt = (
             select(
                 Product.process_id,
@@ -425,9 +482,8 @@ class ProductRepository(GetBackNextIdMixin[Product]):
             .join(Employee, Employee.id == ProductStep.performed_by_id)
             .where(
                 ProductStep.status == StepStatus.done,
-                ProductStep.performed_at.is_not(None),
-                func.date(ProductStep.performed_at) >= date_from,
-                func.date(ProductStep.performed_at) <= date_to,
+                ProductStep.performed_at >= period_start,
+                ProductStep.performed_at < period_end,
             )
         )
 
@@ -450,28 +506,39 @@ class ProductRepository(GetBackNextIdMixin[Product]):
         return [dict(row._mapping) for row in result.all()]
 
     async def get_completed_steps_by_day(
-        self,
-        date_from: date_type,
-        date_to: date_type,
-        employee_id: int | None = None,
+            self,
+            date_from: date_type,
+            date_to: date_type,
+            employee_id: int | None = None,
     ) -> list[dict]:
         """
-        Возвращает по каждому (employee_id, step_definition_id, day)
-        количество фактически закрытых шагов за период. Используется для
-        точного посчета выработки в рублях: позволяет сопоставить каждый
-        день с действовавшей на тот момент нормой (EmployeeNormCalculation)
-        и посчитать среднедневную выработку по интервалам действия нормы.
+        Возвращает число выполненных этапов по дням для каждой комбинации:
+        (employee_id, step_definition_id, day).
+
+        Условие периода использует исходный performed_at, поэтому индекс по
+        performed_at остаётся применимым. func.date применяется только для
+        группировки по производственному календарному дню.
         """
-        stmt = select(
-            ProductStep.performed_by_id.label("employee_id"),
-            ProductStep.step_definition_id,
-            func.date(ProductStep.performed_at).label("day"),
-            func.count(ProductStep.id).label("count"),
-        ).where(
-            ProductStep.status == StepStatus.done,
-            ProductStep.performed_at.is_not(None),
-            func.date(ProductStep.performed_at) >= date_from,
-            func.date(ProductStep.performed_at) <= date_to,
+        period_start, period_end = _make_datetime_period(date_from, date_to)
+
+        # Важно: PostgreSQL для timestamptz вычисляет date(...) в TimeZone сессии.
+        # Для фиксированной бизнес-зоны группировку нужно явно привязать к MSK.
+        day_expr = func.date(
+            ProductStep.performed_at.op("AT TIME ZONE")("Europe/Moscow")
+        )
+
+        stmt = (
+            select(
+                ProductStep.performed_by_id.label("employee_id"),
+                ProductStep.step_definition_id,
+                day_expr.label("day"),
+                func.count(ProductStep.id).label("count"),
+            )
+            .where(
+                ProductStep.status == StepStatus.done,
+                ProductStep.performed_at >= period_start,
+                ProductStep.performed_at < period_end,
+                )
         )
 
         if employee_id is not None:
@@ -480,7 +547,7 @@ class ProductRepository(GetBackNextIdMixin[Product]):
         stmt = stmt.group_by(
             ProductStep.performed_by_id,
             ProductStep.step_definition_id,
-            func.date(ProductStep.performed_at),
+            day_expr,
         )
 
         result = await self.session.execute(stmt)

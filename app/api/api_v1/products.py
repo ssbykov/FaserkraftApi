@@ -173,6 +173,182 @@ async def get_finished_products(
         )
 
 
+async def _calculate_period_earnings(
+    *,
+    repo: ProductRepository,
+    daily_plan_repo: DailyPlanRepository,
+    norm_calc_repo: EmployeeNormCalculationRepository,
+    date_from: date_type,
+    date_to: date_type,
+    employee_id: int | None,
+) -> tuple[list[dict], dict[int, Decimal]]:
+    """
+    Считает выработку в рублях за весь запрошенный период (месяц, квартал,
+    год или произвольный диапазон). Отображаемый диапазон совпадает с
+    полным периодом действия нормы, поэтому доля рабочих дней равна 1 и
+    формула calculate_amount_for_step сводится к обычной сумме за период.
+    """
+    steps_data = await repo.get_completed_steps_stats_by_period(
+        date_from=date_from,
+        date_to=date_to,
+        employee_id=employee_id,
+    )
+
+    daily_rows = await repo.get_completed_steps_by_day(
+        date_from=date_from,
+        date_to=date_to,
+        employee_id=employee_id,
+    )
+    working_days_map = await daily_plan_repo.get_working_days_by_employee(
+        date_from=date_from,
+        date_to=date_to,
+        employee_id=employee_id,
+    )
+
+    step_definition_ids = {row["step_definition_id"] for row in daily_rows}
+    norms_by_step = await norm_calc_repo.get_norms_for_steps(step_definition_ids)
+
+    daily_counts_map: dict[tuple[int, int], dict[date_type, int]] = defaultdict(dict)
+    for row in daily_rows:
+        key = (row["employee_id"], row["step_definition_id"])
+        daily_counts_map[key][row["day"]] = row["count"]
+
+    employee_step_amounts: dict[tuple[int, int], Decimal] = {}
+    for key, daily_counts in daily_counts_map.items():
+        emp_id, step_def_id = key
+        norms = norms_by_step.get(step_def_id, [])
+        intervals = build_norm_intervals(norms, date_from, date_to)
+        employee_working_days = working_days_map.get(emp_id, set())
+
+        # Отображаемый диапазон == полный период, поэтому period_working_days
+        # передаём тем же множеством: доля рабочих дней будет равна 1.
+        amount = calculate_amount_for_step(
+            intervals=intervals,
+            daily_counts=daily_counts,
+            employee_working_days=employee_working_days,
+            period_working_days=employee_working_days,
+        )
+        employee_step_amounts[key] = amount
+
+    for item in steps_data:
+        key = (item["employee_id"], item["step_definition_id"])
+        item["total_amount"] = employee_step_amounts.get(key, Decimal("0"))
+
+    amounts_by_employee: dict[int, Decimal] = defaultdict(lambda: Decimal("0"))
+    for (emp_id, _), amount in employee_step_amounts.items():
+        amounts_by_employee[emp_id] += amount
+
+    return steps_data, amounts_by_employee
+
+
+async def _calculate_first_half_earnings(
+    *,
+    repo: ProductRepository,
+    daily_plan_repo: DailyPlanRepository,
+    norm_calc_repo: EmployeeNormCalculationRepository,
+    month_from: date_type,
+    month_to: date_type,
+    first_half_to: date_type,
+    employee_id: int | None,
+) -> tuple[list[dict], dict[int, Decimal]]:
+    """
+    Считает аванс за 1-15 число как долю от месячной нормы, взвешенную по
+    фактической выработке в первой половине месяца.
+
+    Ключевое отличие от _calculate_period_earnings: интервалы нормы и
+    working_days_map строятся на границах ВСЕГО месяца (month_from,
+    month_to), а не обрезаются по first_half_to. Иначе знаменатель доли
+    ("рабочих дней в месяце") не увидит дни после 15 числа, и расчёт
+    аванса перестанет быть аддитивным относительно суммы за весь месяц.
+    """
+    steps_data = await repo.get_completed_steps_stats_by_period(
+        date_from=month_from,
+        date_to=first_half_to,
+        employee_id=employee_id,
+    )
+
+    daily_rows = await repo.get_completed_steps_by_day(
+        date_from=month_from,
+        date_to=first_half_to,
+        employee_id=employee_id,
+    )
+
+    # Рабочие дни нужны за ВЕСЬ месяц - это знаменатель доли.
+    full_month_working_days_map = await daily_plan_repo.get_working_days_by_employee(
+        date_from=month_from,
+        date_to=month_to,
+        employee_id=employee_id,
+    )
+
+    step_definition_ids = {row["step_definition_id"] for row in daily_rows}
+    norms_by_step = await norm_calc_repo.get_norms_for_steps(step_definition_ids)
+
+    daily_counts_map: dict[tuple[int, int], dict[date_type, int]] = defaultdict(dict)
+    for row in daily_rows:
+        key = (row["employee_id"], row["step_definition_id"])
+        daily_counts_map[key][row["day"]] = row["count"]
+
+    employee_step_amounts: dict[tuple[int, int], Decimal] = {}
+    for key, daily_counts in daily_counts_map.items():
+        emp_id, step_def_id = key
+        norms = norms_by_step.get(step_def_id, [])
+
+        # Интервалы строим на всём месяце, иначе последний интервал
+        # обрежется по first_half_to и знаменатель окажется неверным.
+        intervals = build_norm_intervals(norms, month_from, month_to)
+
+        full_month_days = full_month_working_days_map.get(emp_id, set())
+        first_half_days = {d for d in full_month_days if d <= first_half_to}
+
+        amount = calculate_amount_for_step(
+            intervals=intervals,
+            daily_counts=daily_counts,
+            employee_working_days=first_half_days,
+            period_working_days=full_month_days,
+        )
+        employee_step_amounts[key] = amount
+
+    for item in steps_data:
+        key = (item["employee_id"], item["step_definition_id"])
+        item["total_amount"] = employee_step_amounts.get(key, Decimal("0"))
+
+    amounts_by_employee: dict[int, Decimal] = defaultdict(lambda: Decimal("0"))
+    for (emp_id, _), amount in employee_step_amounts.items():
+        amounts_by_employee[emp_id] += amount
+
+    return steps_data, amounts_by_employee
+
+
+def _build_employee_earnings(
+    *,
+    employee_plans_data: list[dict],
+    steps_data: list[dict],
+    amounts_by_employee: dict[int, Decimal],
+) -> list[EmployeeEarningsRead]:
+    """
+    Собирает EmployeeEarningsRead из посчитанной выработки для набора
+    сотрудников. Используется и для основного периода, и для аванса.
+    """
+    steps_by_employee: dict[int, list[dict]] = defaultdict(list)
+    for s in steps_data:
+        steps_by_employee[s["employee_id"]].append(s)
+
+    return [
+        EmployeeEarningsRead(
+            employee_id=item["employee_id"],
+            employee_name=item["employee_name"],
+            total_earned=amounts_by_employee.get(
+                item["employee_id"], Decimal("0")
+            ).quantize(Decimal("0.01")),
+            steps=[
+                StepCountStatRead(**s)
+                for s in steps_by_employee.get(item["employee_id"], [])
+            ],
+        )
+        for item in employee_plans_data
+    ]
+
+
 @router.get(
     "/statistics/period",
     response_model=PeriodStatisticsRead,
@@ -187,6 +363,7 @@ async def get_period_statistics(
         EmployeeNormCalculationRepository, Depends(get_employee_norm_calculation_repo)
     ],
     employee: Annotated[EmployeeRead, Depends(get_current_employee)],
+    include_first_half: bool = False,
 ):
     try:
         employee_id = None
@@ -206,55 +383,20 @@ async def get_period_statistics(
             employee_id=employee_id,
         )
 
-        steps_data = await repo.get_completed_steps_stats_by_period(
+        steps_data, amounts_by_employee = await _calculate_period_earnings(
+            repo=repo,
+            daily_plan_repo=daily_plan_repo,
+            norm_calc_repo=norm_calc_repo,
             date_from=date_from,
             date_to=date_to,
             employee_id=employee_id,
         )
-
-        daily_rows = await repo.get_completed_steps_by_day(
-            date_from=date_from,
-            date_to=date_to,
-            employee_id=employee_id,
-        )
-        working_days_map = await daily_plan_repo.get_working_days_by_employee(
-            date_from=date_from,
-            date_to=date_to,
-            employee_id=employee_id,
-        )
-
-        step_definition_ids = {row["step_definition_id"] for row in daily_rows}
-        norms_by_step = await norm_calc_repo.get_norms_for_steps(step_definition_ids)
-
-        daily_counts_map: dict[tuple[int, int], dict[date_type, int]] = defaultdict(dict)
-        for row in daily_rows:
-            key = (row["employee_id"], row["step_definition_id"])
-            daily_counts_map[key][row["day"]] = row["count"]
-
-        employee_step_amounts: dict[tuple[int, int], Decimal] = {}
-        for key, daily_counts in daily_counts_map.items():
-            emp_id, step_def_id = key
-            norms = norms_by_step.get(step_def_id, [])
-            intervals = build_norm_intervals(norms, date_from, date_to)
-            employee_working_days = working_days_map.get(emp_id, set())
-            amount = calculate_amount_for_step(
-                intervals, daily_counts, employee_working_days
-            )
-            employee_step_amounts[key] = amount
-
-        for item in steps_data:
-            key = (item["employee_id"], item["step_definition_id"])
-            item["total_amount"] = employee_step_amounts.get(key, Decimal("0"))
 
         employee_plans_data = await daily_plan_repo.get_employee_plan_stats_by_period(
             date_from=date_from,
             date_to=date_to,
             employee_id=employee_id,
         )
-
-        amounts_by_employee: dict[int, Decimal] = defaultdict(lambda: Decimal("0"))
-        for (emp_id, _), amount in employee_step_amounts.items():
-            amounts_by_employee[emp_id] += amount
 
         employee_plans = [
             EmployeePlanStatRead(
@@ -266,25 +408,42 @@ async def get_period_statistics(
             for item in employee_plans_data
         ]
 
-        employee_earnings = [
-            EmployeeEarningsRead(
-                employee_id=item["employee_id"],
-                employee_name=item["employee_name"],
-                total_earned=amounts_by_employee.get(
-                    item["employee_id"], Decimal("0")
-                ).quantize(Decimal("0.01")),
-                steps=[
-                    StepCountStatRead(**s)
-                    for s in steps_data
-                    if s["employee_id"] == item["employee_id"]
-                ],
-            )
-            for item in employee_plans_data
-        ]
+        employee_earnings = _build_employee_earnings(
+            employee_plans_data=employee_plans_data,
+            steps_data=steps_data,
+            amounts_by_employee=amounts_by_employee,
+        )
 
         total_earned_all = sum(amounts_by_employee.values(), Decimal("0")).quantize(
             Decimal("0.01")
         )
+
+        # --- Аванс: сумма выработки за 1-15 число месяца ---
+        # Считается только по явному запросу клиента и только если период
+        # действительно начинается с 1 числа месяца. Использует отдельную
+        # функцию _calculate_first_half_earnings, которая строит интервалы
+        # норм и working_days на границах ВСЕГО месяца, а не только 1-15,
+        # чтобы аванс + остаток месяца всегда были равны сумме за весь месяц.
+        first_half_earnings: list[EmployeeEarningsRead] = []
+
+        if include_first_half and date_from.day == 1:
+            first_half_to = min(date_from.replace(day=15), date_to)
+
+            fh_steps_data, fh_amounts_by_employee = await _calculate_first_half_earnings(
+                repo=repo,
+                daily_plan_repo=daily_plan_repo,
+                norm_calc_repo=norm_calc_repo,
+                month_from=date_from,
+                month_to=date_to,
+                first_half_to=first_half_to,
+                employee_id=employee_id,
+            )
+
+            first_half_earnings = _build_employee_earnings(
+                employee_plans_data=employee_plans_data,
+                steps_data=fh_steps_data,
+                amounts_by_employee=fh_amounts_by_employee,
+            )
 
         return PeriodStatisticsRead(
             total_working_days=total_working_days,
@@ -294,6 +453,7 @@ async def get_period_statistics(
             total_steps=[StepCountStatRead(**item) for item in steps_data],
             employee_plans=employee_plans,
             employee_earnings=employee_earnings,
+            first_half_earnings=first_half_earnings,
             total_earned_all=total_earned_all,
         )
     except HTTPException:
@@ -303,6 +463,7 @@ async def get_period_statistics(
             status_code=500,
             detail="Произошла ошибка при получении статистики",
         )
+
 
 @router.get(
     "/by-step-employee-day",

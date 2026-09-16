@@ -45,4 +45,5 @@ class PeriodStatisticsRead(BaseModel):
     total_steps: list[StepCountStatRead] = []
     employee_plans: list[EmployeePlanStatRead] = []
     employee_earnings: list[EmployeeEarningsRead] = []
+    first_half_earnings: list[EmployeeEarningsRead] = []
     total_earned_all: Decimal = Decimal("0")
