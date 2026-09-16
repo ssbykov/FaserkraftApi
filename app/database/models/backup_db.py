@@ -14,7 +14,8 @@ class BackupDb(BaseWithId):
     """
 
     __tablename__ = "backups"
-    name: Mapped[str] = mapped_column(String(50), nullable=False, unique=True)
+
+    name: Mapped[str] = mapped_column(String(50), unique=True)
 
     def __str__(self) -> str:
         return self.name

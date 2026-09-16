@@ -1,4 +1,3 @@
-from pathlib import Path
 from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -6,7 +5,7 @@ from fastapi.responses import FileResponse
 
 from api.api_v1.dependencies import get_current_employee
 from core import settings
-from database.models.app_update import VersionInfoResponse
+from database.schemas.app_update import VersionInfoResponse
 from database.schemas.employee import EmployeeRead
 from update.get_apk_info import load_release_info
 

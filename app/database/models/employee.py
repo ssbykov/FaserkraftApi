@@ -1,10 +1,19 @@
 from enum import Enum
+from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import Column, String, ForeignKey
+from sqlalchemy import ForeignKey, String
 from sqlalchemy import Enum as SqlEnum
-from sqlalchemy.orm import relationship, Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import BaseWithId
+
+if TYPE_CHECKING:
+    from .daily_plan import DailyPlan
+    from .device import Device
+    from .inventory import Inventory
+    from .packaging_box import Packaging
+    from .product_step import ProductStep
+    from .user import User
 
 
 class Role(str, Enum):
@@ -16,46 +25,42 @@ class Role(str, Enum):
 class Employee(BaseWithId):
     __tablename__ = "employees"
 
-    name = Column(String, nullable=False, unique=True)
-    role = Column(SqlEnum(Role, name="role_enum"), nullable=False, default=Role.worker)
-    telegram_id: Mapped[int] = mapped_column(String, nullable=True, unique=True)
-
-    user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id"), nullable=True, unique=True
+    name: Mapped[str] = mapped_column(String, unique=True)
+    role: Mapped[Role] = mapped_column(
+        SqlEnum(Role, name="role_enum"), default=Role.worker
     )
-    user = relationship(
-        "User",
+    telegram_id: Mapped[Optional[str]] = mapped_column(String, unique=True)
+
+    user_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), unique=True
+    )
+    user: Mapped[Optional["User"]] = relationship(
         uselist=False,
-        back_populates=None,
         viewonly=True,
         lazy="selectin",
     )
-    device_id: Mapped[int] = mapped_column(
-        ForeignKey("devices.id"), nullable=True, unique=True
+    device_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("devices.id"), unique=True
     )
-    device = relationship("Device", back_populates=None, viewonly=True)
+    device: Mapped[Optional["Device"]] = relationship(back_populates="employee")
 
-    plans = relationship("DailyPlan", back_populates="employee")
-    product_steps_performed = relationship(
-        "ProductStep",
+    plans: Mapped[list["DailyPlan"]] = relationship(back_populates="employee")
+    product_steps_performed: Mapped[list["ProductStep"]] = relationship(
         back_populates="performed_by",
         foreign_keys="ProductStep.performed_by_id",
     )
-    product_steps_accepted = relationship(
-        "ProductStep",
+    product_steps_accepted: Mapped[list["ProductStep"]] = relationship(
         back_populates="accepted_by",
         foreign_keys="ProductStep.accepted_by_id",
     )
-    packaging_performed = relationship(
-        "Packaging",
+    packaging_performed: Mapped[list["Packaging"]] = relationship(
         back_populates="performed_by",
         foreign_keys="Packaging.performed_by_id",
     )
-    inventory = relationship(
-        "Inventory",
+    inventory: Mapped[list["Inventory"]] = relationship(
         back_populates="created_by",
         foreign_keys="Inventory.created_by_id",
     )
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return self.name

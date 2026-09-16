@@ -1,8 +1,6 @@
 import os
 import sys
 
-from .crud.backup_db import BackupDbRepository
-
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
 from typing import Annotated, AsyncGenerator, Type
@@ -51,6 +49,8 @@ class DbHelper:
                 session.add(el_schema.to_orm())
 
     async def synch_backups(self) -> None:
+        from .crud.backup_db import BackupDbRepository  # локальный импорт — разрывает цикл
+
         async for session in self.get_session():
             repo = BackupDbRepository(session)
             await repo.synchronize()

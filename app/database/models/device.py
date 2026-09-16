@@ -1,23 +1,32 @@
+from datetime import datetime
+from typing import TYPE_CHECKING, Optional
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import Column, String, Boolean, DateTime, func
-from sqlalchemy.orm import relationship
+from sqlalchemy import Boolean, DateTime, String, func
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import BaseWithId
+
+if TYPE_CHECKING:
+    from .employee import Employee
 
 
 class Device(BaseWithId):
     __tablename__ = "devices"
 
-    device_id = Column(String, unique=True, nullable=False)
-    model = Column(String, nullable=False)
-    manufacturer = Column(String, nullable=False)
-    is_active = Column(Boolean, default=False)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    device_id: Mapped[str] = mapped_column(String, unique=True)
+    model: Mapped[str] = mapped_column(String)
+    manufacturer: Mapped[str] = mapped_column(String)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
-    employee = relationship("Employee", back_populates="device", uselist=False)
+    employee: Mapped[Optional["Employee"]] = relationship(
+        back_populates="device", uselist=False
+    )
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         created_at = self.created_at.astimezone(ZoneInfo("Europe/Moscow")).strftime(
             "%Y-%m-%d %H:%M:%S"
         )

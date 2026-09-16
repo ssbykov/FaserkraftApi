@@ -1,7 +1,14 @@
-from sqlalchemy import Column, Integer, ForeignKey, Date, UniqueConstraint
-from sqlalchemy.orm import relationship
+from datetime import date
+from typing import TYPE_CHECKING
+
+from sqlalchemy import Date, ForeignKey, UniqueConstraint
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import BaseWithId
+
+if TYPE_CHECKING:
+    from .daily_plan_step import DailyPlanStep
+    from .employee import Employee
 
 
 class DailyPlan(BaseWithId):
@@ -15,16 +22,14 @@ class DailyPlan(BaseWithId):
         ),
     )
 
-    employee_id = Column(Integer, ForeignKey("employees.id"), nullable=False)
-    date = Column(Date, nullable=False)
+    employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id"))
+    date: Mapped[date] = mapped_column(Date)
 
-    employee = relationship(
-        "Employee",
+    employee: Mapped["Employee"] = relationship(
         back_populates="plans",
         lazy="selectin",
     )
-    steps = relationship(
-        "DailyPlanStep",
+    steps: Mapped[list["DailyPlanStep"]] = relationship(
         back_populates="daily_plan",
         cascade="all, delete-orphan",
     )
@@ -37,5 +42,5 @@ class DailyPlan(BaseWithId):
     def actual_total(self) -> int:
         return sum(s.actual_quantity for s in self.steps)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"{self.employee} - {self.date}"

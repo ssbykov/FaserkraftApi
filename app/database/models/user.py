@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
-class User(BaseWithId, SQLAlchemyBaseUserTable[int]):  # type: ignore[misc]
+class User(BaseWithId, SQLAlchemyBaseUserTable[int]):
     """
     Модель пользователя для аутентификации и управления доступом.
 
@@ -32,22 +32,21 @@ class User(BaseWithId, SQLAlchemyBaseUserTable[int]):  # type: ignore[misc]
         __str__: Возвращает email пользователя как строковое представление.
         model_dump: Возвращает словарь с основными полями пользователя.
     """
+
     __tablename__ = "users"
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=func.now(),
         server_default=func.now(),
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         onupdate=func.now(),
-        default=func.now(),
         server_default=func.now(),
     )
 
     @classmethod
-    def get_db(cls, session: "AsyncSession"):  # type: ignore
+    def get_db(cls, session: "AsyncSession") -> SQLAlchemyUserDatabase:
         return SQLAlchemyUserDatabase(session, cls)
 
     def __str__(self) -> str:

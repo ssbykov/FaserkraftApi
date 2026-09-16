@@ -1,20 +1,24 @@
-from sqlalchemy import Column, String, Integer
-from sqlalchemy.orm import relationship
+from typing import TYPE_CHECKING
+
+from sqlalchemy import String
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import BaseWithId
+
+if TYPE_CHECKING:
+    from .process import Process
 
 
 class SizeType(BaseWithId):
     __tablename__ = "size_type"
 
-    name = Column(String, unique=True, nullable=False)
-    packaging_count = Column(Integer, nullable=False)
+    name: Mapped[str] = mapped_column(String, unique=True)
+    packaging_count: Mapped[int]
 
-    work_process = relationship(
-        "Process",
+    work_process: Mapped[list["Process"]] = relationship(
         back_populates="size_type",
         lazy="selectin",
     )
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return self.name

@@ -1,15 +1,17 @@
-from sqlalchemy import (
-    Column,
-    String,
-    ForeignKey,
-    DateTime,
-    func,
-)
+from datetime import datetime
 from enum import Enum
-from sqlalchemy.orm import relationship
+from typing import TYPE_CHECKING, Optional
+
+from sqlalchemy import DateTime, ForeignKey, String, func
 from sqlalchemy import Enum as SqlEnum
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import BaseWithId
+
+if TYPE_CHECKING:
+    from .packaging_box import Packaging
+    from .process import Process
+    from .product_step import ProductStep
 
 
 class ProductStatus(str, Enum):
@@ -18,7 +20,7 @@ class ProductStatus(str, Enum):
     rework = "rework"
 
     @property
-    def label(self):
+    def label(self) -> str:
         labels = {
             ProductStatus.normal: "🟢",
             ProductStatus.rework: "🟡",
@@ -26,31 +28,36 @@ class ProductStatus(str, Enum):
         }
         return labels.get(self, self.value)
 
+
 class Product(BaseWithId):
     __tablename__ = "products"
 
-    serial_number = Column(String, unique=True, nullable=False)
-    process_id = Column(ForeignKey("processes.id"), nullable=False)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    serial_number: Mapped[str] = mapped_column(String, unique=True)
+    process_id: Mapped[int] = mapped_column(ForeignKey("processes.id"))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
-    status = Column(
+    status: Mapped[ProductStatus] = mapped_column(
         SqlEnum(ProductStatus, name="product_status_enum", native_enum=True),
-        nullable=False,
         server_default=ProductStatus.normal.value,
     )
 
-    packaging_id = Column(ForeignKey("packaging.id"), nullable=True)
+    packaging_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("packaging.id")
+    )
 
-    packaging = relationship("Packaging", back_populates="products", lazy="selectin")
+    packaging: Mapped[Optional["Packaging"]] = relationship(
+        back_populates="products", lazy="selectin"
+    )
 
-    work_process = relationship("Process", back_populates="products")
-    steps = relationship(
-        "ProductStep",
+    work_process: Mapped["Process"] = relationship(back_populates="products")
+    steps: Mapped[list["ProductStep"]] = relationship(
         back_populates="product",
         cascade="all, delete-orphan",
         order_by="ProductStep.id",
         lazy="selectin",
     )
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return self.serial_number
