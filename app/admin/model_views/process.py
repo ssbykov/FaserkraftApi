@@ -33,6 +33,10 @@ class ProcessAdmin(
         "steps",
     )
 
+    column_formatters_detail = {
+        "steps": lambda m, a: [f"{s.order}: {s.template}" for s in m.steps],
+    }
+
     form_rules = [
         "name",
         "size_type",

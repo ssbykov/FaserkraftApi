@@ -1,7 +1,8 @@
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ForeignKey
+from sqlalchemy import ForeignKey, inspect
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm.exc import DetachedInstanceError
 
 from .base import BaseWithId
 
@@ -50,5 +51,26 @@ class StepDefinition(BaseWithId):
         return self.full_name
 
     @property
+    def _process_label(self) -> str:
+        state = inspect(self)
+        # атрибут уже подгружен в память - можно безопасно читать без lazy load
+        if "work_process" not in state.unloaded:
+            try:
+                return str(self.work_process)
+            except DetachedInstanceError:
+                pass
+        return f"Процесс #{self.process_id}"
+
+    @property
+    def _template_label(self) -> str:
+        state = inspect(self)
+        if "template" not in state.unloaded:
+            try:
+                return str(self.template)
+            except DetachedInstanceError:
+                pass
+        return f"Шаблон #{self.template_id}"
+
+    @property
     def full_name(self) -> str:
-        return f"{self.work_process}: {self.template}"
+        return f"{self._process_label}: {self._template_label}"
