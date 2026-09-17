@@ -609,6 +609,8 @@ class ProductRepository(GetBackNextIdMixin[Product]):
         Продукты, у которых ЕСТЬ этап с указанным step_definition_id,
         выполненный заданным сотрудником в указанную дату.
         """
+        period_start, period_end = _make_datetime_period(day, day)
+
         has_step_subq = (
             select(ProductStep.id)
             .where(
@@ -616,8 +618,8 @@ class ProductRepository(GetBackNextIdMixin[Product]):
                 ProductStep.step_definition_id == step_definition_id,
                 ProductStep.performed_by_id == employee_id,
                 ProductStep.status == StepStatus.done,
-                ProductStep.performed_at >= day,
-                ProductStep.performed_at < day + timedelta(days=1),
+                ProductStep.performed_at >= period_start,
+                ProductStep.performed_at < period_end,
             )
             .exists()
         )
