@@ -30,6 +30,10 @@ def upgrade() -> None:
         nullable=False,
         existing_server_default=sa.text("now()"),
     )
+    op.execute(
+        "ALTER TABLE product_steps "
+        "DROP CONSTRAINT IF EXISTS fk_product_steps_step_definition_id_step_definitions"
+    )
     op.create_foreign_key(
         op.f("fk_product_steps_step_definition_id_step_definitions"),
         "product_steps",
@@ -56,7 +60,6 @@ def upgrade() -> None:
         existing_type=postgresql.TIMESTAMP(timezone=True),
         nullable=False,
     )
-
 
 def downgrade() -> None:
     op.alter_column(
