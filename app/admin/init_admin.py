@@ -347,11 +347,18 @@ class NewAdmin(Admin):
             raise HTTPException(detail=restriction, status_code=409)
 
         if isinstance(model_view, BackupDbAdmin):
-            backup_id = int(request.query_params["pks"])
-            if backup_db := await model_view.get_by_id(backup_id):
-                file_path = os.path.join(settings.db.backups_dir, backup_db.name)
-                if os.path.exists(file_path):
-                    os.remove(file_path)
+            pks_raw = request.query_params["pks"]
+            backup_ids = [int(pk) for pk in pks_raw.split(",") if pk]
+
+            for backup_id in backup_ids:
+                if backup_db := await model_view.get_by_id(backup_id):
+                    file_path = os.path.join(settings.db.backups_dir, backup_db.name)
+                    try:
+                        if os.path.exists(file_path):
+                            os.remove(file_path)
+                    except OSError as file_err:
+                        # не блокируем удаление записи из БД из-за проблемы с файлом
+                        pass
         try:
             result = await super().delete(request)
             return cast(Response, result)
