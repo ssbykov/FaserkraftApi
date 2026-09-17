@@ -1,3 +1,4 @@
+from calendar import monthrange
 from collections import defaultdict
 from datetime import date
 from datetime import date as date_type
@@ -20,9 +21,14 @@ from app.database.crud.employee_norm_calculations import (
     EmployeeNormCalculationRepository,
 )
 from app.database.crud.processes import ProcessRepository, get_process_repo
+from app.database.crud.production_calendar import (
+    ProductionCalendarRepository,
+    get_production_calendar_repo,
+)
 from app.database.crud.products import ProductRepository, get_product_repo
 from app.database.models.employee import Role
 from app.database.models.product import ProductStatus
+from app.database.schemas.daily_plan_step import DailyPlanStepRead
 from app.database.schemas.employee import EmployeeRead
 from app.database.schemas.product import (
     ProductRead,
@@ -37,7 +43,6 @@ from app.database.schemas.statistics import (
     EmployeePlanStatRead,
     EmployeeEarningsRead,
 )
-from app.database.schemas.daily_plan_step import DailyPlanStepRead
 
 router = APIRouter(
     tags=["Products"],
@@ -176,17 +181,22 @@ async def get_finished_products(
 async def _calculate_period_earnings(
     *,
     repo: ProductRepository,
-    daily_plan_repo: DailyPlanRepository,
     norm_calc_repo: EmployeeNormCalculationRepository,
+    production_calendar_repo: ProductionCalendarRepository,
     date_from: date_type,
     date_to: date_type,
     employee_id: int | None,
 ) -> tuple[list[dict], dict[int, Decimal]]:
     """
-    Считает выработку в рублях за весь запрошенный период (месяц, квартал,
-    год или произвольный диапазон). Отображаемый диапазон совпадает с
-    полным периодом действия нормы, поэтому доля рабочих дней равна 1 и
-    формула calculate_amount_for_step сводится к обычной сумме за период.
+    Считает выработку в рублях за запрошенный период (месяц, квартал, год
+    или произвольный диапазон).
+
+    Знаменатель формулы (working_days_in_month) - это количество рабочих
+    дней по производственному календарю РФ за КАЖДЫЙ календарный месяц,
+    покрываемый диапазоном [date_from, date_to]. Если диапазон охватывает
+    несколько месяцев (квартал/год), каждый месяц считается со своим
+    знаменателем, а результаты суммируются - иначе для кварталов/года
+    потерялась бы аддитивность относительно помесячного аванса.
     """
     steps_data = await repo.get_completed_steps_stats_by_period(
         date_from=date_from,
@@ -195,11 +205,6 @@ async def _calculate_period_earnings(
     )
 
     daily_rows = await repo.get_completed_steps_by_day(
-        date_from=date_from,
-        date_to=date_to,
-        employee_id=employee_id,
-    )
-    working_days_map = await daily_plan_repo.get_working_days_by_employee(
         date_from=date_from,
         date_to=date_to,
         employee_id=employee_id,
@@ -213,22 +218,42 @@ async def _calculate_period_earnings(
         key = (row["employee_id"], row["step_definition_id"])
         daily_counts_map[key][row["day"]] = row["count"]
 
+    # Разбиваем запрошенный диапазон на календарные месяцы, чтобы для
+    # каждого месяца использовать его собственное количество рабочих дней.
+    month_ranges = _split_into_calendar_months(date_from, date_to)
+
+    working_days_by_month: dict[tuple[int, int], int] = {}
+    for month_start, month_end in month_ranges:
+        working_days_by_month[(month_start.year, month_start.month)] = (
+            await production_calendar_repo.get_working_days_count(
+                month_start, month_end
+            )
+        )
+
     employee_step_amounts: dict[tuple[int, int], Decimal] = {}
     for key, daily_counts in daily_counts_map.items():
         emp_id, step_def_id = key
         norms = norms_by_step.get(step_def_id, [])
-        intervals = build_norm_intervals(norms, date_from, date_to)
-        employee_working_days = working_days_map.get(emp_id, set())
 
-        # Отображаемый диапазон == полный период, поэтому period_working_days
-        # передаём тем же множеством: доля рабочих дней будет равна 1.
-        amount = calculate_amount_for_step(
-            intervals=intervals,
-            daily_counts=daily_counts,
-            employee_working_days=employee_working_days,
-            period_working_days=employee_working_days,
-        )
-        employee_step_amounts[key] = amount
+        amount = Decimal("0")
+        for month_start, month_end in month_ranges:
+            intervals = build_norm_intervals(norms, month_start, month_end)
+            working_days_in_month = working_days_by_month[
+                (month_start.year, month_start.month)
+            ]
+
+            # daily_counts за пределами текущего месяца интервалам не
+            # соответствуют - calculate_amount_for_step сам отфильтрует
+            # по границам интервала, но intervals здесь уже обрезаны
+            # по месяцу, поэтому лишние дни просто не совпадут ни с одним
+            # интервалом и не будут учтены.
+            amount += calculate_amount_for_step(
+                intervals=intervals,
+                daily_counts=daily_counts,
+                working_days_in_month=working_days_in_month,
+            )
+
+        employee_step_amounts[key] = amount.quantize(Decimal("0.01"))
 
     for item in steps_data:
         key = (item["employee_id"], item["step_definition_id"])
@@ -241,25 +266,57 @@ async def _calculate_period_earnings(
     return steps_data, amounts_by_employee
 
 
+def _split_into_calendar_months(
+    date_from: date_type,
+    date_to: date_type,
+) -> list[tuple[date_type, date_type]]:
+    """
+    Разбивает диапазон [date_from, date_to] на список интервалов,
+    каждый из которых целиком лежит в одном календарном месяце.
+
+    Например, для 15 сентября - 20 октября вернёт:
+        [(15 сентября, 30 сентября), (1 октября, 20 октября)]
+    """
+    ranges: list[tuple[date_type, date_type]] = []
+    current_start = date_from
+
+    while current_start <= date_to:
+        last_day_of_month = monthrange(current_start.year, current_start.month)[1]
+        month_end = current_start.replace(day=last_day_of_month)
+        current_end = min(month_end, date_to)
+
+        ranges.append((current_start, current_end))
+
+        if current_end >= date_to:
+            break
+
+        current_start = current_end + date_type.resolution
+
+    return ranges
+
+
 async def _calculate_first_half_earnings(
     *,
     repo: ProductRepository,
-    daily_plan_repo: DailyPlanRepository,
     norm_calc_repo: EmployeeNormCalculationRepository,
+    production_calendar_repo: ProductionCalendarRepository,
     month_from: date_type,
     month_to: date_type,
     first_half_to: date_type,
     employee_id: int | None,
 ) -> tuple[list[dict], dict[int, Decimal]]:
     """
-    Считает аванс за 1-15 число как долю от месячной нормы, взвешенную по
-    фактической выработке в первой половине месяца.
+    Считает аванс за 1-15 число как долю от месячной нормы.
 
-    Ключевое отличие от _calculate_period_earnings: интервалы нормы и
-    working_days_map строятся на границах ВСЕГО месяца (month_from,
-    month_to), а не обрезаются по first_half_to. Иначе знаменатель доли
-    ("рабочих дней в месяце") не увидит дни после 15 числа, и расчёт
-    аванса перестанет быть аддитивным относительно суммы за весь месяц.
+    Знаменатель (working_days_in_month) берётся за ВЕСЬ календарный
+    месяц (month_from..month_to) через ProductionCalendarRepository -
+    тем же способом, что и в _calculate_period_earnings для полного
+    периода. Числитель - фактическая выработка только за 1-15 число,
+    так как daily_rows запрашиваются с date_to=first_half_to.
+
+    Благодаря общему (полномесячному) знаменателю сумма аванса (1-15)
+    и сумма за оставшуюся часть месяца (16-конец) в точности
+    складываются в сумму за весь месяц.
     """
     steps_data = await repo.get_completed_steps_stats_by_period(
         date_from=month_from,
@@ -273,13 +330,6 @@ async def _calculate_first_half_earnings(
         employee_id=employee_id,
     )
 
-    # Рабочие дни нужны за ВЕСЬ месяц - это знаменатель доли.
-    full_month_working_days_map = await daily_plan_repo.get_working_days_by_employee(
-        date_from=month_from,
-        date_to=month_to,
-        employee_id=employee_id,
-    )
-
     step_definition_ids = {row["step_definition_id"] for row in daily_rows}
     norms_by_step = await norm_calc_repo.get_norms_for_steps(step_definition_ids)
 
@@ -288,23 +338,21 @@ async def _calculate_first_half_earnings(
         key = (row["employee_id"], row["step_definition_id"])
         daily_counts_map[key][row["day"]] = row["count"]
 
+    working_days_in_month = await production_calendar_repo.get_working_days_count(
+        month_from, month_to
+    )
+
     employee_step_amounts: dict[tuple[int, int], Decimal] = {}
     for key, daily_counts in daily_counts_map.items():
         emp_id, step_def_id = key
         norms = norms_by_step.get(step_def_id, [])
 
-        # Интервалы строим на всём месяце, иначе последний интервал
-        # обрежется по first_half_to и знаменатель окажется неверным.
         intervals = build_norm_intervals(norms, month_from, month_to)
-
-        full_month_days = full_month_working_days_map.get(emp_id, set())
-        first_half_days = {d for d in full_month_days if d <= first_half_to}
 
         amount = calculate_amount_for_step(
             intervals=intervals,
             daily_counts=daily_counts,
-            employee_working_days=first_half_days,
-            period_working_days=full_month_days,
+            working_days_in_month=working_days_in_month,
         )
         employee_step_amounts[key] = amount
 
@@ -362,10 +410,19 @@ async def get_period_statistics(
     norm_calc_repo: Annotated[
         EmployeeNormCalculationRepository, Depends(get_employee_norm_calculation_repo)
     ],
+    production_calendar_repo: Annotated[
+        ProductionCalendarRepository, Depends(get_production_calendar_repo)
+    ],
     employee: Annotated[EmployeeRead, Depends(get_current_employee)],
     include_first_half: bool = False,
 ):
     try:
+        if date_from > date_to:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="date_from не может быть позже date_to",
+            )
+
         employee_id = None
         finished_products_data = []
 
@@ -385,8 +442,8 @@ async def get_period_statistics(
 
         steps_data, amounts_by_employee = await _calculate_period_earnings(
             repo=repo,
-            daily_plan_repo=daily_plan_repo,
             norm_calc_repo=norm_calc_repo,
+            production_calendar_repo=production_calendar_repo,
             date_from=date_from,
             date_to=date_to,
             employee_id=employee_id,
@@ -420,23 +477,30 @@ async def get_period_statistics(
 
         # --- Аванс: сумма выработки за 1-15 число месяца ---
         # Считается только по явному запросу клиента и только если период
-        # действительно начинается с 1 числа месяца. Использует отдельную
-        # функцию _calculate_first_half_earnings, которая строит интервалы
-        # норм и working_days на границах ВСЕГО месяца, а не только 1-15,
-        # чтобы аванс + остаток месяца всегда были равны сумме за весь месяц.
+        # действительно начинается с 1 числа месяца.
+        #
+        # working_days_in_month для аванса берётся за ВЕСЬ месяц через
+        # production_calendar_repo - тот же знаменатель, что и для полного
+        # периода, поэтому сумма аванса + сумма за 16-конец месяца равны
+        # сумме за весь месяц (аддитивность гарантируется тем, что
+        # знаменатель не зависит от подпериода, а только от месяца).
         first_half_earnings: list[EmployeeEarningsRead] = []
 
         if include_first_half and date_from.day == 1:
             first_half_to = min(date_from.replace(day=15), date_to)
+            last_day_of_month = monthrange(date_from.year, date_from.month)[1]
+            month_to = date_from.replace(day=last_day_of_month)
 
-            fh_steps_data, fh_amounts_by_employee = await _calculate_first_half_earnings(
-                repo=repo,
-                daily_plan_repo=daily_plan_repo,
-                norm_calc_repo=norm_calc_repo,
-                month_from=date_from,
-                month_to=date_to,
-                first_half_to=first_half_to,
-                employee_id=employee_id,
+            fh_steps_data, fh_amounts_by_employee = (
+                await _calculate_first_half_earnings(
+                    repo=repo,
+                    norm_calc_repo=norm_calc_repo,
+                    production_calendar_repo=production_calendar_repo,
+                    month_from=date_from,
+                    month_to=month_to,
+                    first_half_to=first_half_to,
+                    employee_id=employee_id,
+                )
             )
 
             first_half_earnings = _build_employee_earnings(
