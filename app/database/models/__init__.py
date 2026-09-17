@@ -12,6 +12,7 @@ from .packaging_box import Packaging
 from .process import Process
 from .product import Product
 from .product_step import ProductStep
+from .production_calendar_day import ProductionCalendarDay
 from .size_type import SizeType
 from .step_definition import StepDefinition
 from .step_template import StepTemplate
@@ -29,6 +30,7 @@ __all__ = [
     "StepTemplate",
     "StepDefinition",
     "EmployeeNormCalculation",
+    "ProductionCalendarDay",
     "DailyPlan",
     "AccessToken",
     "Base",
