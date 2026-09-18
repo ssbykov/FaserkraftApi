@@ -13,6 +13,7 @@ class StepCountStatRead(BaseModel):
     step_definition_id: int
     order: int
     step_name: str
+    template_id: int
     employee_id: int
     employee_name: str
     count: int
