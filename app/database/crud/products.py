@@ -434,7 +434,6 @@ class ProductRepository(GetBackNextIdMixin[Product]):
             .join(Process, Process.id == Product.process_id)
             .where(
                 Product.status == ProductStatus.normal,
-                Product.packaging_id.is_(None),
                 ~not_done_exists,
                 last_step_performed_at_subq >= period_start,
                 last_step_performed_at_subq < period_end,
@@ -469,6 +468,7 @@ class ProductRepository(GetBackNextIdMixin[Product]):
                 ProductStep.step_definition_id,
                 StepDefinition.order.label("order"),
                 StepTemplate.name.label("step_name"),
+                StepTemplate.id.label("template_id"),
                 ProductStep.performed_by_id.label("employee_id"),
                 Employee.name.label("employee_name"),
                 func.count(ProductStep.id).label("count"),
