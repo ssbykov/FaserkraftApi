@@ -1,7 +1,7 @@
 {
   "version_name": "3.2",
   "apk_file": "app-release.apk",
-  "roles": ["master"],
+  "roles": ["master", "worker"],
   "force_update": false,
   "changelog": "Расширена статистика. Добавлена выработка в руб."
 }
