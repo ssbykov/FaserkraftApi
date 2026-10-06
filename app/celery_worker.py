@@ -9,7 +9,15 @@ from app.core.redis import REDIS_PATH, redis_client
 LOCK_TTL = 6 * 3600
 PENDING_VALUE = "pending"
 
-celery_app = Celery("fkapi", broker=REDIS_PATH, backend=REDIS_PATH)
+celery_app = Celery(
+    "fkapi",
+    broker=REDIS_PATH,
+    backend=REDIS_PATH,
+    include=[
+        "app.tasks.create_backup",
+        "app.tasks.send_email",
+    ],
+)
 celery_app.conf.result_expires = 3600
 celery_app.autodiscover_tasks(["app.tasks"])
 

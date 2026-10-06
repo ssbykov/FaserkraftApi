@@ -1,31 +1,71 @@
-from apscheduler.schedulers.asyncio import AsyncIOScheduler  # type: ignore
-from apscheduler.triggers.cron import CronTrigger  # type: ignore
-from celery import chain  # type: ignore
+import logging
 
-from app.tasks.create_backup import run_process_backup, backup_task
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
+
+from app.celery_worker import (
+    attach_task_id,
+    release,
+    try_acquire,
+)
+from app.tasks.create_backup import backup_task, run_process_backup
+
+
+logger = logging.getLogger(__name__)
 
 scheduler = AsyncIOScheduler()
 
 
 async def backup_db() -> None:
-    run_process_backup.delay()
+    if not try_acquire(backup_task.name):
+        logger.info(
+            "Бэкап по расписанию пропущен: "
+            "предыдущий бэкап ещё не завершён"
+        )
+        return
+
+    try:
+        result = run_process_backup.delay()
+        attach_task_id(backup_task.name, result.id)
+
+    except Exception:
+        try:
+            release(backup_task.name)
+        except Exception:
+            logger.exception(
+                "Не удалось снять блокировку "
+                "после ошибки запуска бэкапа по расписанию"
+            )
+
+        logger.exception(
+            "Не удалось поставить бэкап по расписанию в очередь"
+        )
+        raise
+
+    logger.info(
+        "Бэкап по расписанию поставлен в очередь: %s",
+        result.id,
+    )
 
 
 async def startup_scheduler() -> None:
-    # Настраиваем задачу на выполнение каждый день в заданное время
     scheduler.add_job(
         backup_db,
         CronTrigger(
             hour=1,
             minute=0,
-            timezone="Europe/Moscow"
+            timezone="Europe/Moscow",
         ),
-        misfire_grace_time=60,  # Допустимое время задержки (секунды)
+        id="daily_database_backup",
+        replace_existing=True,
+        misfire_grace_time=60,
+        max_instances=1,
     )
 
-    # Запускаем планировщик
-    scheduler.start()
+    if not scheduler.running:
+        scheduler.start()
 
 
 async def shutdown_scheduler() -> None:
-    scheduler.shutdown()
+    if scheduler.running:
+        scheduler.shutdown()

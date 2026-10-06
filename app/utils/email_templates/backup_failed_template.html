@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Ошибка резервного копирования</title>
+</head>
+<body style="font-family: Arial, sans-serif; color: #222;">
+<h2 style="color: #b42318;">
+    Ошибка резервного копирования базы данных
+</h2>
+
+<p>Задача создания бэкапа завершилась с ошибкой.</p>
+
+<p>
+    <strong>Время:</strong>
+    {{ failed_at }}
+</p>
+
+<p>
+    <strong>ID задачи:</strong>
+    {{ task_id }}
+</p>
+
+<p>
+    <strong>Тип ошибки:</strong>
+    {{ error_type }}
+</p>
+
+<div style="
+    background: #fff1f0;
+    border: 1px solid #f3b5b0;
+    padding: 12px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  ">{{ error_message }}
+</div>
+
+<p>
+    Проверьте журнал Celery и статус последнего бэкапа
+    в разделе «Резервные копии» административной панели.
+</p>
+
+<p>
+    Если ошибка возникла после создания локального дампа,
+    файл мог остаться в каталоге резервных копий.
+</p>
+</body>
+</html>
