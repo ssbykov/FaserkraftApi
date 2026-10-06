@@ -1,4 +1,4 @@
-from .db import db_helper, SessionDep
+from .db import db_helper, SessionDep, worker_db_helper
 from .models import (
     BaseWithId,
     Base,
@@ -29,6 +29,7 @@ __all__ = [
     "DailyPlan",
     "BackupDb",
     "db_helper",
+    "worker_db_helper",
     "SessionDep",
     "AccessToken",
     "BaseSchema",

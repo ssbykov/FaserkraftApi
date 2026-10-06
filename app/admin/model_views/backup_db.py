@@ -6,19 +6,20 @@ from starlette.responses import RedirectResponse
 
 from app.admin.custom_model_view import CustomModelView
 from app.admin.utils import check_superuser
+from app.celery_worker import try_acquire, attach_task_id, release
 from app.database import db_helper
 from app.database.backup_db import restore_database_from_dump
 from app.database.crud.backup_db import BackupDbRepository
 from app.database.models.backup_db import BackupDb
-from app.celery_worker import check_job_status
 from app.tasks.create_backup import run_process_backup, backup_task
-from core.redis import redis_client
 
 
 class BackupDbAdmin(
     CustomModelView[BackupDb],
     model=BackupDb,
 ):
+    show_backup_status = True
+    
     repo_type = BackupDbRepository
     name_plural = "Резервные копии"
     name = "Резервная копия"
@@ -64,19 +65,12 @@ class BackupDbAdmin(
 
     @staticmethod
     async def create_backup() -> str | None:
-        task = check_job_status(backup_task.name)
-
-        # Если нет задачи или задача завершилась успешно — запускаем новый бэкап
-        if not task or task.status == "SUCCESS":
-            new_task = run_process_backup.delay()
-            redis_client.set(backup_task.name, new_task.id)
-            return None
-
-        # Если задача завершилась неудачно — можно очистить ключ
-        if task.status == "FAILURE":
-            redis_client.delete(backup_task.name)
-            # Вывести информацию об ошибке
-            info = f"{type(getattr(task, 'result', None))}, {task.status}"
-            return f"Ошибка: {info}"
-
-        return "Предыдущий бэкап не закончен..."
+        if not try_acquire(backup_task.name):
+            return "Предыдущий бэкап не закончен..."
+        try:
+            res = run_process_backup.delay()
+            attach_task_id(backup_task.name, res.id)
+        except Exception:
+            release(backup_task.name)
+            raise
+        return None

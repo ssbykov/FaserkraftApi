@@ -16,12 +16,15 @@ from app.database.schemas import (
 )
 
 
+from sqlalchemy.pool import NullPool
+
+
 class DbHelper:
-    def __init__(self, url: str, echo: bool = False):
-        self.engine = create_async_engine(
-            url=url,
-            echo=echo,
-        )
+    def __init__(self, url: str, echo: bool = False, use_null_pool: bool = False):
+        kwargs: dict = {"url": url, "echo": echo}
+        if use_null_pool:
+            kwargs["poolclass"] = NullPool
+        self.engine = create_async_engine(**kwargs)
         self.async_session = async_sessionmaker(
             bind=self.engine,
             autoflush=False,
@@ -37,9 +40,9 @@ class DbHelper:
 
     @staticmethod
     async def _init_model(
-            session: AsyncSession,
-            model_class: Type[BaseWithId],
-            schema_class: Type[BaseSchema],
+        session: AsyncSession,
+        model_class: Type[BaseWithId],
+        schema_class: Type[BaseSchema],
     ) -> None:
         result = await session.execute(select(func.count()).select_from(model_class))
         count = result.scalar()
@@ -48,13 +51,18 @@ class DbHelper:
                 el_schema = schema_class(**el)
                 session.add(el_schema.to_orm())
 
-    async def synch_backups(self) -> None:
-        from .crud.backup_db import BackupDbRepository  # локальный импорт — разрывает цикл
+    async def synch_backups(self, session: AsyncSession | None = None) -> None:
+        from .crud.backup_db import BackupDbRepository
 
-        async for session in self.get_session():
-            repo = BackupDbRepository(session)
-            await repo.synchronize()
+        if session is not None:
+            await BackupDbRepository(session).synchronize()
+            return
+        async for s in self.get_session():
+            await BackupDbRepository(s).synchronize()
 
 
 db_helper = DbHelper(url=str(settings.db.url), echo=settings.db.echo)
+worker_db_helper = DbHelper(
+    url=str(settings.db.url), echo=settings.db.echo, use_null_pool=True
+)
 SessionDep = Annotated[AsyncSession, Depends(db_helper.get_session)]

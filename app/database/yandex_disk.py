@@ -9,6 +9,10 @@ import certifi
 from app.core import settings
 
 
+class YaDiskError(Exception):
+    pass
+
+
 class YaDisk:
     API_URL = "https://cloud-api.yandex.net/v1/disk/resources"
     TOKEN_INFO_URL = "https://login.yandex.ru/info"
@@ -113,60 +117,53 @@ class YaDisk:
             return False
 
     async def _create_folder(self, session: aiohttp.ClientSession) -> None:
-        if not await self._check_token_valid(session):
-            return
-        try:
-            async with session.put(
-                self.API_URL,
-                headers=self.headers,
-                params={"path": self.folder_name},
-                ssl=self.ssl_context,
-            ) as response:
-                if response.status not in (201, 409):
-                    raise Exception(f"Статус: {response.status}")
-        except Exception as e:
-            logging.error(f"Ошибка при создании папки на Яндекс.Диске: {e}")
+        async with session.put(
+            self.API_URL,
+            headers=self.headers,
+            params={"path": self.folder_name},
+            ssl=self.ssl_context,
+        ) as response:
+            if response.status not in (201, 409):
+                raise YaDiskError(
+                    f"Не удалось создать папку, статус: {response.status}"
+                )
 
     async def get_upload_url(
         self, session: aiohttp.ClientSession, file_name: str
-    ) -> str | None:
-        if not await self._check_token_valid(session):
-            return None
+    ) -> str:
         upload_url = self.API_URL + "/upload"
         params = {"path": f"{self.folder_name}/{file_name}", "overwrite": "true"}
-        try:
-            async with session.get(
-                upload_url,
-                headers=self.headers,
-                params=params,
-                ssl=self.ssl_context,
-            ) as response:
-                if response.status != 200:
-                    raise Exception(f"Статус: {response.status}")
-                data = await response.json()
-                return str(data.get("href", ""))
-        except Exception as e:
-            logging.error(f"Ошибка при получении ссылки для загрузки файла: {e}")
-            return None
+        async with session.get(
+            upload_url,
+            headers=self.headers,
+            params=params,
+            ssl=self.ssl_context,
+        ) as response:
+            if response.status != 200:
+                raise YaDiskError(
+                    f"Не удалось получить ссылку загрузки, статус: {response.status}"
+                )
+            data = await response.json()
+            href = str(data.get("href", ""))
+            if not href:
+                raise YaDiskError("Яндекс.Диск вернул пустую ссылку загрузки")
+            return href
 
     async def copy_photos_to_disk(self, file_name: str) -> None:
         async with aiohttp.ClientSession() as session:
+            if not await self._check_token_valid(session):
+                raise YaDiskError("Токен Яндекс.Диска невалиден и не обновляется")
             await self._create_folder(session)
             upload_url = await self.get_upload_url(session, file_name)
-            if not upload_url:
-                return None
             file_path = os.path.join(settings.db.backups_dir, file_name)
-            try:
-                with open(file_path, "rb") as f:
-                    async with session.put(
-                        upload_url, data=f, ssl=self.ssl_context
-                    ) as response:
-                        if response.status != 201:
-                            raise Exception(f"Статус:{response.status}")
-                        return None
-            except Exception as e:
-                logging.error(f"Ошибка при загрузке файла: {e}")
-                return None
+            with open(file_path, "rb") as f:
+                async with session.put(
+                    upload_url, data=f, ssl=self.ssl_context
+                ) as response:
+                    if response.status not in (201, 202):
+                        raise YaDiskError(
+                            f"Ошибка загрузки файла, статус: {response.status}"
+                        )
 
 
 async def create_yadisk_instance(tokens_repo) -> YaDisk:

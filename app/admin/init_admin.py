@@ -17,6 +17,7 @@ from starlette.responses import Response, RedirectResponse, JSONResponse
 from app.core import settings
 from app.database import db_helper, Process, StepDefinition, DailyPlan
 from app.database.crud.employees import get_employee_repo
+from app.core.backup_status import get_backup_status
 from .backend import AdminAuth
 from .custom_model_view import CustomModelView
 from .model_views import (
@@ -48,6 +49,12 @@ async def init_admin(app: Any) -> "NewAdmin":
         templates_dir=str(settings.sql_admin.templates),
         authentication_backend=AdminAuth(secret_key=settings.sql_admin.secret),
     )
+
+    def backup_status():
+        return get_backup_status("tasks.backup")
+
+    admin.templates.env.globals["backup_status"] = backup_status
+
     admin.add_view(ProcessAdmin)
     admin.add_view(SizeTypeAdmin)
     admin.add_view(StepDefinitionAdmin)

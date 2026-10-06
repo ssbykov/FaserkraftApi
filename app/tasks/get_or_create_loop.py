@@ -1,14 +1,11 @@
 import asyncio
 
+_loop: asyncio.AbstractEventLoop | None = None
 
-def get_or_create_loop():
-    try:
-        # Пытаемся получить текущий цикл событий (сработает, если он уже был создан нами ранее)
-        loop = asyncio.get_event_loop()
-        if loop.is_closed():
-            raise RuntimeError
-    except RuntimeError:
-        # Если цикла нет (Python 3.11+) или он закрыт, создаем новый
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-    return loop
+
+def get_or_create_loop() -> asyncio.AbstractEventLoop | None:
+    global _loop
+    if _loop is None or _loop.is_closed():
+        _loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(_loop)
+    return _loop

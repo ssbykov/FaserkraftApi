@@ -7,10 +7,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from app.core import settings
-from app.database import db_helper
+from app.core.redis import redis_client
 from app.database.crud.yandex_tokens import YandexTokensRepository
 from app.database.yandex_disk import create_yadisk_instance
-from app.core.redis import redis_client
+from app.database import worker_db_helper
+from app.core.backup_status import save_last_result
 
 if TYPE_CHECKING:
     from app.core.config import DbSettings
@@ -205,43 +206,83 @@ async def restore_database_from_dump(dump_file: str) -> None:
         remove_pgpass_file(pgpass_path)
 
 
-async def create_backup(task_name: str) -> str | None:
+async def create_backup(task_name: str) -> str:
     logging.info("=" * 50)
     logging.info("Запуск процесса создания бэкапа")
 
-    dump_file = None
     try:
-        if dump_file := await create_database_dump():
-            logging.info(
-                f"Дамп создан: {dump_file}, начинаем копирование на Яндекс.Диск"
+        dump_file = await create_database_dump()
+
+        logging.info(
+            "Дамп создан: %s, копируем на Яндекс.Диск",
+            dump_file,
+        )
+
+        async with worker_db_helper.async_session() as session:
+            tokens_repo = YandexTokensRepository(session)
+            yadisk = await create_yadisk_instance(
+                tokens_repo=tokens_repo,
             )
 
-            async for session in db_helper.get_session():
-                try:
-                    tokens_repo = YandexTokensRepository(session)
-                    yadisk = await create_yadisk_instance(tokens_repo=tokens_repo)
-                    await yadisk.copy_photos_to_disk(dump_file)
-                    logging.info(f"Файл {dump_file} успешно скопирован на Яндекс.Диск")
+            await yadisk.copy_photos_to_disk(dump_file)
 
-                    await db_helper.synch_backups()
-                    logging.debug("Синхронизация бэкапов завершена")
+            logging.info(
+                "Файл %s скопирован на Яндекс.Диск",
+                dump_file,
+            )
 
-                except Exception as e:
-                    logging.error(f"Ошибка при работе с Яндекс.Диском: {e}")
-                    raise
-                finally:
-                    await session.close()
-                break
-    except Exception as e:
-        logging.error(f"Критическая ошибка при создании бэкапа: {e}")
-        logging.exception("Полный стек ошибки:")  # Добавляет traceback
-        return None
+            await worker_db_helper.synch_backups(session)
+            logging.debug("Синхронизация бэкапов завершена")
 
-    redis_client.delete(task_name)
-    logging.info(f"Процесс создания бэкапа завершен. Результат: {dump_file}")
-    logging.info("=" * 50)
-    return dump_file
+    except Exception as exc:
+        logging.exception("Критическая ошибка при создании бэкапа")
 
+        # Ошибка записи уведомления не должна скрыть исходную
+        # ошибку создания бэкапа.
+        try:
+            save_last_result(
+                name=task_name,
+                ok=False,
+                message=f"{type(exc).__name__}: {exc}",
+            )
+        except Exception:
+            logging.exception(
+                "Не удалось сохранить сообщение об ошибке бэкапа"
+            )
 
-if __name__ == "__main__":
-    asyncio.run(create_backup())
+        raise
+
+    else:
+        # Сбой записи уведомления не превращает успешно
+        # созданный бэкап в неуспешный.
+        try:
+            save_last_result(
+                name=task_name,
+                ok=True,
+                message=(
+                    "Бэкап создан и загружен на Яндекс.Диск: "
+                    f"{dump_file}"
+                ),
+            )
+        except Exception:
+            logging.exception(
+                "Бэкап создан, но не удалось сохранить уведомление"
+            )
+
+        logging.info(
+            "Бэкап завершён. Результат: %s",
+            dump_file,
+        )
+        logging.info("=" * 50)
+
+        return dump_file
+
+    finally:
+        try:
+            redis_client.delete(task_name)
+        except Exception:
+            logging.exception(
+                "Не удалось удалить блокировку бэкапа %s. "
+                "Она останется до истечения TTL.",
+                task_name,
+            )
