@@ -1,12 +1,10 @@
 import logging
 from pathlib import Path
-
-from app.admin.utils import check_superuser
-from typing import Any, cast, Sequence, Awaitable, Iterable
+from typing import Any, Awaitable, Iterable, Sequence, cast
 
 from sqladmin import Admin
 from sqladmin._types import ENGINE_TYPE
-from sqladmin.authentication import login_required, AuthenticationBackend
+from sqladmin.authentication import AuthenticationBackend, login_required
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import async_sessionmaker
@@ -15,33 +13,39 @@ from starlette.applications import Starlette
 from starlette.exceptions import HTTPException
 from starlette.middleware import Middleware
 from starlette.requests import Request
-from starlette.responses import Response, RedirectResponse, JSONResponse
+from starlette.responses import JSONResponse, RedirectResponse, Response
 
+from app.admin.security import csrf_token
+from app.admin.utils import check_superuser
 from app.core import settings
 from app.core.backup_status import get_backup_status
-from app.database import db_helper, Process, StepDefinition, DailyPlan
+from app.database import DailyPlan, Process, StepDefinition, db_helper
 from app.database.crud.employees import get_employee_repo
+
 from .backend import AdminAuth
 from .custom_model_view import CustomModelView
 from .model_views import (
     BackupDbAdmin,
-    UserAdmin,
-    ProcessAdmin,
-    StepDefinitionAdmin,
-    StepTemplateAdmin,
-    ProductAdmin,
-    ProductStepAdmin,
-    EmployeeAdmin,
-    DeviceAdmin,
     DailyPlanAdmin,
     DailyPlanStepAdmin,
-    PackagingAdmin,
-    OrderAdmin,
+    DeviceAdmin,
+    EmployeeAdmin,
+    EmployeeNormCalculationAdmin,
     InventoryAdmin,
     InventoryItemAdmin,
-    EmployeeNormCalculationAdmin,
+    OrderAdmin,
+    PackagingAdmin,
+    ProcessAdmin,
+    ProductAdmin,
+    ProductStepAdmin,
+    StepDefinitionAdmin,
+    StepTemplateAdmin,
+    UserAdmin,
 )
 from .model_views.size_type import SizeTypeAdmin
+
+
+logger = logging.getLogger(__name__)
 
 
 async def init_admin(app: Any) -> "NewAdmin":
@@ -50,8 +54,13 @@ async def init_admin(app: Any) -> "NewAdmin":
         db_helper.engine,
         title="Производственный учет",
         templates_dir=str(settings.sql_admin.templates),
-        authentication_backend=AdminAuth(secret_key=settings.sql_admin.secret),
+        authentication_backend=AdminAuth(
+            secret_key=settings.sql_admin.secret,
+        ),
     )
+
+    # Функция для скрытых полей и метатега CSRF в шаблонах.
+    admin.templates.env.globals["csrf_token"] = csrf_token
 
     def backup_status():
         return get_backup_status("tasks.backup")
@@ -84,7 +93,7 @@ class NewAdmin(Admin):
         self,
         app: Starlette,
         engine: ENGINE_TYPE | None = None,
-        session_maker: sessionmaker | async_sessionmaker | None = None,  # type: ignore
+        session_maker: sessionmaker | async_sessionmaker | None = None,
         base_url: str = "/admin",
         title: str = "Admin",
         logo_url: str | None = None,
@@ -94,7 +103,6 @@ class NewAdmin(Admin):
         templates_dir: str = "templates",
         authentication_backend: AuthenticationBackend | None = None,
     ) -> None:
-
         super().__init__(
             app=app,
             engine=engine,
@@ -107,39 +115,43 @@ class NewAdmin(Admin):
             middlewares=middlewares,
             authentication_backend=authentication_backend,
         )
-        from starlette.exceptions import HTTPException as StarletteHTTPException
 
         async def http_exception(
-            request: Request, exc: Exception
+            request: Request,
+            exc: Exception,
         ) -> Response | Awaitable[Response]:
-            assert isinstance(exc, (StarletteHTTPException, HTTPException))
-            status_code = getattr(exc, "status_code", 500)
-            detail = getattr(exc, "detail", "Internal Server Error")
+            assert isinstance(exc, HTTPException)
 
-            # Если AJAX-запрос — возвращаем JSON, иначе шаблон
+            status_code = exc.status_code
+            detail = exc.detail
+
             is_ajax = (
-                request.headers.get("x-requested-with") == "XMLHttpRequest"
-                or request.headers.get("accept") == "application/json"
+                request.headers.get("x-requested-with")
+                == "XMLHttpRequest"
+                or "application/json"
+                in request.headers.get("accept", "")
                 or request.method == "DELETE"
             )
 
             if is_ajax:
-                # Для AJAX — возвращаем JSON со специальным полем для редиректа
                 return JSONResponse(
                     status_code=status_code,
                     content={"detail": detail},
+                    headers=exc.headers,
                 )
 
-            # Для других ошибок — тоже используем шаблон
-            context = {
-                "status_code": status_code,
-                "message": detail,
-            }
             return await self.templates.TemplateResponse(
-                request, "sqladmin/error.html", context, status_code=status_code
+                request,
+                "sqladmin/error.html",
+                {
+                    "status_code": status_code,
+                    "message": detail,
+                },
+                status_code=status_code,
+                headers=exc.headers,
             )
 
-        self.admin.exception_handlers = {HTTPException: http_exception}
+        self.admin.exception_handlers[HTTPException] = http_exception
 
     async def login(self, request: Request) -> Response:
         assert isinstance(self.authentication_backend, AdminAuth)
@@ -150,18 +162,40 @@ class NewAdmin(Admin):
                 "sqladmin/login.html",
             )
 
-        result = await self.authentication_backend.login_with_info(request)
+        if request.method != "POST":
+            raise HTTPException(status_code=405)
+
+        result = await self.authentication_backend.login_with_info(
+            request,
+        )
 
         if not result.is_ok:
-            return await self.templates.TemplateResponse(
+            status_code = getattr(
+                request.state,
+                "admin_login_status",
+                400,
+            )
+
+            response = await self.templates.TemplateResponse(
                 request,
                 "sqladmin/login.html",
                 {
                     "error": result.error,
                     "message": result.message,
                 },
-                status_code=400,
+                status_code=status_code,
             )
+
+            retry_after = getattr(
+                request.state,
+                "admin_login_retry_after",
+                None,
+            )
+
+            if retry_after is not None:
+                response.headers["Retry-After"] = str(retry_after)
+
+            return response
 
         return RedirectResponse(
             request.url_for("admin:index"),
@@ -171,65 +205,115 @@ class NewAdmin(Admin):
     @login_required
     async def details(self, request: Request) -> Response:
         result = await super().details(request)
+
         if isinstance(result, RedirectResponse):
             return result
+
         context = result.context
         context["request"] = request
-        return await self.templates.TemplateResponse(request, result.template, context)
+
+        return await self.templates.TemplateResponse(
+            request,
+            result.template,
+            context,
+        )
 
     @staticmethod
-    async def _fill_daily_plan_choices(form):
-        async for session in db_helper.get_session():
-            # 1. Сотрудники
+    async def _fill_daily_plan_choices(form: Any) -> None:
+        async with db_helper.async_session() as session:
             employee_repo = get_employee_repo(session)
             employees = await employee_repo.get_all()
+
             if hasattr(form, "employee_id"):
-                form.employee_id.choices = [(e.id, str(e)) for e in employees]
+                form.employee_id.choices = [
+                    (employee.id, str(employee))
+                    for employee in employees
+                ]
 
-            # 2. Процессы
             processes = (
-                (await session.execute(select(Process).order_by(Process.name)))
-                .scalars()
-                .all()
-            )
-            process_choices = [(p.id, p.name) for p in processes]
-
-            # 3. Этапы
-            steps = (
                 (
                     await session.execute(
-                        select(StepDefinition)
-                        .join(StepDefinition.work_process)
-                        .order_by(Process.name, StepDefinition.order)
+                        select(Process).order_by(Process.name)
                     )
                 )
                 .scalars()
                 .all()
             )
-            step_choices = [(s.id, f"{s.work_process.name} — {s}") for s in steps]
 
-            # 3.1. Плоская форма
+            process_choices = [
+                (process.id, process.name)
+                for process in processes
+            ]
+
+            steps = (
+                (
+                    await session.execute(
+                        select(StepDefinition)
+                        .join(StepDefinition.work_process)
+                        .order_by(
+                            Process.name,
+                            StepDefinition.order,
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            )
+
+            step_choices = [
+                (
+                    step.id,
+                    f"{step.work_process.name} — {step}",
+                )
+                for step in steps
+            ]
+
             if hasattr(form, "process_id"):
                 form.process_id.choices = process_choices
+
             if hasattr(form, "step_definition_id"):
                 form.step_definition_id.choices = step_choices
 
-            # 3.2. FieldList steps
-            if hasattr(form, "steps") and isinstance(form.steps, Iterable):
+            if (
+                hasattr(form, "steps")
+                and isinstance(form.steps, Iterable)
+            ):
                 for subform in form.steps:
-                    if hasattr(subform, "form"):
-                        if hasattr(subform.form, "process_id"):
-                            subform.form.process_id.choices = process_choices
-                        if hasattr(subform.form, "step_definition_id"):
-                            subform.form.step_definition_id.choices = step_choices
+                    if not hasattr(subform, "form"):
+                        continue
 
-            # 4. Данные для JS
-            processes_json = [{"id": p.id, "label": p.name} for p in processes]
-            steps_by_process: dict[int, list[dict]] = {}
-            for s in steps:
-                pid = s.process_id
-                steps_by_process.setdefault(pid, []).append(
-                    {"id": s.id, "label": f"{s.order}: {s.template}"}
+                    if hasattr(subform.form, "process_id"):
+                        subform.form.process_id.choices = (
+                            process_choices
+                        )
+
+                    if hasattr(
+                        subform.form,
+                        "step_definition_id",
+                    ):
+                        subform.form.step_definition_id.choices = (
+                            step_choices
+                        )
+
+            processes_json = [
+                {
+                    "id": process.id,
+                    "label": process.name,
+                }
+                for process in processes
+            ]
+
+            steps_by_process: dict[int, list[dict[str, Any]]] = {}
+
+            for step in steps:
+                steps_by_process.setdefault(
+                    step.process_id,
+                    [],
+                ).append(
+                    {
+                        "id": step.id,
+                        "label": f"{step.order}: {step.template}",
+                    }
                 )
 
             form.process_steps_map = {
@@ -237,56 +321,76 @@ class NewAdmin(Admin):
                 "steps_by_process": steps_by_process,
             }
 
-            break
-
     @staticmethod
-    def _fill_daily_plan_steps(form, model: DailyPlan | None = None) -> None:
-        """Синхронизировать form.steps с model.steps или создать пустые шаги при создании."""
+    def _fill_daily_plan_steps(
+        form: Any,
+        model: DailyPlan | None = None,
+    ) -> None:
+        """Заполнить шаги существующего плана или добавить пустой шаг."""
         if model and getattr(model, "steps", None):
             steps_count = len(model.steps)
         else:
-            # сколько пустых шагов показывать при создании
             steps_count = 1
 
         form.steps.min_entries = steps_count
+
         while len(form.steps) < steps_count:
             form.steps.append_entry()
 
         if not model or not getattr(model, "steps", None):
             return
 
-        # заполнение при редактировании
-        for i, step in enumerate(model.steps):
-            subform = form.steps[i].form
+        for index, step in enumerate(model.steps):
+            subform = form.steps[index].form
 
             if hasattr(subform, "process_id"):
-                subform.process_id.data = step.step_definition.process_id
+                subform.process_id.data = (
+                    step.step_definition.process_id
+                )
 
             if hasattr(subform, "step_definition_id"):
-                subform.step_definition_id.data = step.step_definition_id
+                subform.step_definition_id.data = (
+                    step.step_definition_id
+                )
 
             if hasattr(subform, "planned_quantity"):
-                subform.planned_quantity.data = step.planned_quantity
+                subform.planned_quantity.data = (
+                    step.planned_quantity
+                )
 
             if hasattr(subform, "actual_quantity"):
-                subform.actual_quantity.data = step.actual_quantity
+                subform.actual_quantity.data = (
+                    step.actual_quantity
+                )
 
     @login_required
     async def edit(self, request: Request) -> Response:
+        if not check_superuser(request):
+            raise HTTPException(
+                status_code=403,
+                detail="Доступ запрещён",
+            )
+
         await self._edit(request)
 
         identity = request.path_params["identity"]
         model_view = self.find_custom_model_view(identity)
 
         model = await model_view.get_object_for_edit(request)
-        if not model:
+
+        if model is None:
             raise HTTPException(status_code=404)
 
-        Form = await model_view.scaffold_form(model_view._form_edit_rules)
+        Form = await model_view.scaffold_form(
+            model_view._form_edit_rules,
+        )
 
-        # --- GET ---
         if request.method == "GET":
-            form = Form(obj=model, data=self._normalize_wtform_data(model))
+            form = Form(
+                obj=model,
+                data=self._normalize_wtform_data(model),
+            )
+
             if isinstance(model, DailyPlan):
                 await self._fill_daily_plan_choices(form)
                 self._fill_daily_plan_steps(form, model)
@@ -301,8 +405,13 @@ class NewAdmin(Admin):
                 },
             )
 
-        # --- POST ---
-        form_data = await self._handle_form_data(request, model)
+        if request.method != "POST":
+            raise HTTPException(status_code=405)
+
+        form_data = await self._handle_form_data(
+            request,
+            model,
+        )
         form = Form(form_data, obj=model)
 
         if isinstance(model, DailyPlan):
@@ -322,13 +431,22 @@ class NewAdmin(Admin):
                 status_code=400,
             )
 
-        data = self._denormalize_wtform_data(form.data, model)
+        data = self._denormalize_wtform_data(
+            form.data,
+            model,
+        )
         pk = request.path_params["pk"]
 
-        result: Any = await model_view.update_model(request, pk, data)
+        result: Any = await model_view.update_model(
+            request,
+            pk,
+            data,
+        )
 
-        # DailyPlan: конфликт при изменении (другой план с такой же датой/сотрудником)
-        if isinstance(model, DailyPlan) and result.need_confirm:
+        if (
+            isinstance(model, DailyPlan)
+            and result.need_confirm
+        ):
             return await self.templates.TemplateResponse(
                 request,
                 model_view.edit_template,
@@ -337,7 +455,8 @@ class NewAdmin(Admin):
                     "model_view": model_view,
                     "form": form,
                     "error": (
-                        "План на эту дату для выбранного сотрудника уже существует. "
+                        "План на эту дату для выбранного "
+                        "сотрудника уже существует. "
                         "Сохранить изменения невозможно."
                     ),
                 },
@@ -348,12 +467,22 @@ class NewAdmin(Admin):
             result = result.obj
 
         return RedirectResponse(
-            model_view._build_url_for("admin:details", request, result),
-            status_code=302,
+            model_view._build_url_for(
+                "admin:details",
+                request,
+                result,
+            ),
+            status_code=303,
         )
 
-    def find_custom_model_view(self, identity: str) -> CustomModelView[Any]:
-        return cast(CustomModelView[Any], self._find_model_view(identity))
+    def find_custom_model_view(
+        self,
+        identity: str,
+    ) -> CustomModelView[Any]:
+        return cast(
+            CustomModelView[Any],
+            self._find_model_view(identity),
+        )
 
     @login_required
     async def delete(self, request: Request) -> Response:
@@ -378,7 +507,9 @@ class NewAdmin(Admin):
                 detail="Удаление запрещено",
             )
 
-        restriction = await model_view.check_restrictions_delete(request)
+        restriction = (
+            await model_view.check_restrictions_delete(request)
+        )
 
         if restriction:
             raise HTTPException(
@@ -392,33 +523,47 @@ class NewAdmin(Admin):
             raw_pks = request.query_params.get("pks", "")
 
             try:
-                backup_ids = [int(value) for value in raw_pks.split(",") if value]
+                backup_ids = [
+                    int(value)
+                    for value in raw_pks.split(",")
+                    if value
+                ]
             except ValueError:
                 raise HTTPException(
                     status_code=400,
                     detail="Некорректные идентификаторы",
                 )
 
-            if not backup_ids or any(pk <= 0 for pk in backup_ids):
+            if (
+                not backup_ids
+                or any(pk <= 0 for pk in backup_ids)
+            ):
                 raise HTTPException(
                     status_code=400,
                     detail="Некорректные идентификаторы",
                 )
 
-            root = Path(settings.db.backups_dir).resolve()
+            root = Path(
+                settings.db.backups_dir,
+            ).resolve()
 
             for backup_id in backup_ids:
-                backup = await model_view.get_by_id(backup_id)
+                backup = await model_view.get_by_id(
+                    backup_id,
+                )
+
                 if backup is None:
                     continue
 
                 path = (root / backup.name).resolve()
 
-                # Разрешаем удаление только непосредственного
-                # файла в каталоге резервных копий.
-                if path.parent != root or path.suffix != ".dump":
-                    logging.error(
-                        "Отклонён путь резервной копии: backup_id=%s",
+                if (
+                    path.parent != root
+                    or path.suffix != ".dump"
+                ):
+                    logger.error(
+                        "Отклонён путь резервной копии: "
+                        "backup_id=%s",
                         backup_id,
                     )
 
@@ -433,7 +578,10 @@ class NewAdmin(Admin):
             result = await super().delete(request)
 
         except IntegrityError:
-            logging.exception("Нарушение целостности при удалении в SQLAdmin")
+            logger.exception(
+                "Нарушение целостности при удалении в SQLAdmin"
+            )
+
             return Response(
                 status_code=409,
                 content="Удаление нарушает связи данных.",
@@ -443,45 +591,51 @@ class NewAdmin(Admin):
             raise
 
         except Exception:
-            logging.exception("Ошибка удаления в SQLAdmin")
+            logger.exception("Ошибка удаления в SQLAdmin")
+
             return Response(
                 status_code=500,
                 content="Не удалось удалить запись.",
             )
 
-        # Файлы удаляем только после успешного ответа родителя.
         if result.status_code < 400:
             for path in backup_paths:
                 try:
                     path.unlink(missing_ok=True)
+
                 except OSError:
-                    logging.exception(
-                        "Запись удалена, но файл бэкапа удалить не удалось"
+                    logger.exception(
+                        "Запись удалена, но файл бэкапа "
+                        "удалить не удалось"
                     )
 
         return cast(Response, result)
 
     @login_required
     async def create(self, request: Request) -> Response:
+        if not check_superuser(request):
+            raise HTTPException(
+                status_code=403,
+                detail="Доступ запрещён",
+            )
+
         await self._create(request)
 
         identity = request.path_params["identity"]
         model_view = self.find_custom_model_view(identity)
 
-        # --- спец-обработка BackupDbAdmin ---
         if isinstance(model_view, BackupDbAdmin):
             if request.method == "GET":
                 return await self.templates.TemplateResponse(
                     request,
                     "sqladmin/backup_create.html",
-                    {"model_view": model_view},
+                    {
+                        "model_view": model_view,
+                    },
                 )
 
             if request.method != "POST":
                 raise HTTPException(status_code=405)
-
-            if not check_superuser(request):
-                raise HTTPException(status_code=403)
 
             message = await model_view.create_backup()
 
@@ -489,28 +643,40 @@ class NewAdmin(Admin):
                 request.session["flash_messages"] = message
 
             return RedirectResponse(
-                request.url_for("admin:list", identity=identity),
+                request.url_for(
+                    "admin:list",
+                    identity=identity,
+                ),
                 status_code=303,
             )
 
-        Form = await model_view.scaffold_form(model_view._form_create_rules)
-        context = {
+        Form = await model_view.scaffold_form(
+            model_view._form_create_rules,
+        )
+
+        context: dict[str, Any] = {
             "model_view": model_view,
             "obj": None,
             "page_suffix": "",
         }
 
-        # --- GET ---
         if request.method == "GET":
             form = Form()
+
             if model_view.model is DailyPlan:
                 await self._fill_daily_plan_choices(form)
+
             context["form"] = form
+
             return await self.templates.TemplateResponse(
-                request, model_view.create_template, context
+                request,
+                model_view.create_template,
+                context,
             )
 
-        # --- POST ---
+        if request.method != "POST":
+            raise HTTPException(status_code=405)
+
         form_data = await self._handle_form_data(request)
         form = Form(form_data)
 
@@ -523,33 +689,52 @@ class NewAdmin(Admin):
                 error="Пожалуйста, исправьте ошибки в форме.",
                 errors=form.errors,
             )
+
             return await self.templates.TemplateResponse(
-                request, model_view.create_template, context, status_code=400
+                request,
+                model_view.create_template,
+                context,
+                status_code=400,
             )
 
-        data = self._denormalize_wtform_data(form.data, model_view.model)
+        data = self._denormalize_wtform_data(
+            form.data,
+            model_view.model,
+        )
 
-        result: Any = await model_view.insert_model(request, data)
+        result: Any = await model_view.insert_model(
+            request,
+            data,
+        )
 
-        # Для DailyPlan: если план уже есть — просто сообщение и остаёмся на create
-        if model_view.model is DailyPlan and result.need_confirm:
+        if (
+            model_view.model is DailyPlan
+            and result.need_confirm
+        ):
             context.update(
                 form=form,
                 error=(
-                    "План на эту дату для выбранного сотрудника уже существует. "
+                    "План на эту дату для выбранного "
+                    "сотрудника уже существует. "
                     "Создание второго плана невозможно."
                 ),
             )
 
             return await self.templates.TemplateResponse(
-                request, model_view.create_template, context, status_code=400
+                request,
+                model_view.create_template,
+                context,
+                status_code=400,
             )
 
         if model_view.model is DailyPlan:
             result = result.obj
 
-        # обычное успешное создание
         return RedirectResponse(
-            model_view._build_url_for("admin:details", request, result),
-            status_code=302,
+            model_view._build_url_for(
+                "admin:details",
+                request,
+                result,
+            ),
+            status_code=303,
         )

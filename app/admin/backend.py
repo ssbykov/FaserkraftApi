@@ -8,6 +8,7 @@ from starlette.middleware import Middleware
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.requests import Request
 
+from app.admin.login_limiter import check_login_limit
 from app.admin.security import (
     ADMIN_COOKIE_SECURE,
     ADMIN_IDLE_TIMEOUT,
@@ -93,6 +94,34 @@ class AdminAuth(AuthenticationBackend):
             return AdminAuthResponse(
                 is_ok=False,
                 error="Неверный логин или пароль.",
+            )
+
+        try:
+            limit = await check_login_limit(
+                request=request,
+                username=username,
+            )
+
+        except Exception:
+            logger.exception("Не удалось проверить ограничение входа в SQLAdmin")
+
+            request.state.admin_login_status = 503
+
+            return AdminAuthResponse(
+                is_ok=False,
+                error="Вход временно недоступен. Повторите позже.",
+            )
+
+        if not limit.allowed:
+            request.state.admin_login_status = 429
+            request.state.admin_login_retry_after = limit.retry_after
+
+            return AdminAuthResponse(
+                is_ok=False,
+                error=(
+                    "Слишком много попыток входа. "
+                    f"Повторите через {limit.retry_after} сек."
+                ),
             )
 
         credentials = OAuth2PasswordRequestForm(

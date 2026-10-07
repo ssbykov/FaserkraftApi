@@ -139,51 +139,29 @@ url=model_view._url_for_action(request, custom_action) + '?pks=' + (get_object_i
 {% endfor %}
 
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    const urlParams = new URLSearchParams(window.location.search);
-    const flashErrorEncoded = urlParams.get('flash_error');
-
-    if (flashErrorEncoded) {
-        try {
-            // Декодируем URL-encoded строку
-            const flashError = decodeURIComponent(flashErrorEncoded);
-
-            // Создаем алерт
-            const container = document.getElementById('flash-error-container');
-            container.innerHTML = `
-                <div class="container-fluid">
-                    <div class="alert alert-danger alert-dismissible fade show" role="alert">
-                        ${flashError}
-                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                    </div>
-                </div>
-            `;
-
-            // Убираем параметр из URL чтобы сообщение не показывалось при обновлении
-            const url = new URL(window.location);
-            url.searchParams.delete('flash_error');
-            window.history.replaceState({}, '', url);
-
-            // Авто-закрытие через 5 секунд
-            setTimeout(() => {
-                const alertDiv = container.querySelector('.alert');
-                if (alertDiv) {
-                    const closeBtn = alertDiv.querySelector('.btn-close');
-                    if (closeBtn) closeBtn.click();
-                }
-            }, 5000);
-
-            // Закрытие при клике на кнопку
-            container.addEventListener('click', function(e) {
-                if (e.target.classList.contains('btn-close')) {
-                    container.innerHTML = '';
-                }
-            });
-
-        } catch (error) {
-            console.error('Error decoding flash error:', error);
-        }
-    }
+document.addEventListener("DOMContentLoaded", function () {
+  const url = new URL(window.location.href);
+  const message = url.searchParams.get("flash_error");
+  const container = document.getElementById("flash-error-container");
+  if (message === null || !container) return;
+  const wrapper = document.createElement("div");
+  wrapper.className = "container-fluid";
+  const alert = document.createElement("div");
+  alert.className = "alert alert-danger alert-dismissible fade show";
+  alert.setAttribute("role", "alert");
+  const text = document.createElement("span");
+  text.textContent = message;
+  const close = document.createElement("button");
+  close.type = "button";
+  close.className = "btn-close";
+  close.setAttribute("aria-label", "Закрыть");
+  close.addEventListener("click", () => wrapper.remove());
+  alert.append(text, close);
+  wrapper.append(alert);
+  container.replaceChildren(wrapper);
+  url.searchParams.delete("flash_error");
+  window.history.replaceState({}, "", url);
+  window.setTimeout(() => wrapper.remove(), 5000);
 });
 </script>
 
