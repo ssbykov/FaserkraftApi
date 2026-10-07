@@ -2,21 +2,26 @@ import asyncio
 import logging
 import os
 import subprocess
+import tempfile
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Iterator
 
 from app.core import settings
+from app.core.backup_status import save_last_result
 from app.core.redis import redis_client
+from app.database import worker_db_helper
 from app.database.crud.yandex_tokens import YandexTokensRepository
 from app.database.yandex_disk import create_yadisk_instance
-from app.database import worker_db_helper
-from app.core.backup_status import save_last_result
 
 if TYPE_CHECKING:
     from app.core.config import DbSettings
 
-# Настройка логгера для модуля
+
+logger = logging.getLogger(__name__)
+
+COMMAND_TIMEOUT_SECONDS = 1800
 
 
 def generate_dump_name(db_name: str) -> str:
@@ -24,221 +29,327 @@ def generate_dump_name(db_name: str) -> str:
     return f"{db_name}_backup_{timestamp}.dump"
 
 
-def create_pgpass_file(pgpass_path: str, db: "DbSettings") -> None:
+def escape_pgpass_value(value: str) -> str:
+    if "\n" in value or "\r" in value or "\x00" in value:
+        raise ValueError("Параметры подключения содержат недопустимые символы")
+
+    return value.replace("\\", "\\\\").replace(":", "\\:")
+
+
+@contextmanager
+def temporary_pgpass(db: "DbSettings") -> Iterator[str]:
+    """
+    Создать отдельный файл авторизации для одной операции.
+
+    Пользовательские ~/.pgpass и pgpass.conf не изменяются.
+    """
+    path: str | None = None
+
     try:
-        Path(pgpass_path).parent.mkdir(parents=True, exist_ok=True)
-        with open(pgpass_path, "w") as f:
-            f.write(f"{db.host}:{db.port}:{db.database}:{db.user}:{db.password}\n")
-        os.chmod(pgpass_path, 0o600)
-        logging.debug(f"PGpass файл создан: {pgpass_path}")
-    except Exception as e:
-        logging.error(f"Ошибка при создании pgpass файла {pgpass_path}: {e}")
-        raise
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            prefix="fkapi_pgpass_",
+            suffix=".conf",
+            delete=False,
+        ) as file:
+            path = file.name
+
+            # На Windows доступ также зависит от ACL
+            # временного каталога.
+            os.chmod(path, 0o600)
+
+            values = (
+                str(db.host),
+                str(db.port),
+                str(db.database),
+                str(db.user),
+                str(db.password),
+            )
+
+            line = ":".join(escape_pgpass_value(value) for value in values)
+
+            file.write(line + "\n")
+
+        yield path
+
+    finally:
+        if path is not None:
+            try:
+                Path(path).unlink(missing_ok=True)
+            except OSError:
+                logger.exception("Не удалось удалить временный файл pgpass")
 
 
-def remove_pgpass_file(pgpass_path: str) -> None:
-    try:
-        os.remove(pgpass_path)
-        logging.debug(f"PGpass файл удален: {pgpass_path}")
-    except FileNotFoundError:
-        logging.warning(f"Файл pgpass {pgpass_path} не найден для удаления")
-    except Exception as e:
-        logging.error(f"Ошибка при удалении pgpass файла {pgpass_path}: {e}")
+async def run_command(
+    cmd: list[str],
+    pgpass_path: str,
+    timeout_seconds: int = COMMAND_TIMEOUT_SECONDS,
+) -> None:
+    if not cmd:
+        raise ValueError("Не указана команда для выполнения")
 
+    if timeout_seconds <= 0:
+        raise ValueError("Таймаут должен быть положительным")
 
-async def run_command(cmd: list[str], pgpass_path: str) -> None:
     env = os.environ.copy()
     env["PGPASSFILE"] = pgpass_path
 
-    logging.debug(f"Выполнение команды: {' '.join(cmd)}")
+    # Используем пароль только из созданного для операции файла.
+    env.pop("PGPASSWORD", None)
+
+    logger.info(
+        "Запуск %s, таймаут %s сек.",
+        cmd[0],
+        timeout_seconds,
+    )
 
     try:
-        loop = asyncio.get_running_loop()
-        process = await loop.run_in_executor(
-            None,
-            lambda: subprocess.run(
-                cmd,
-                env=env,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="ignore",
-            ),
+        process = await asyncio.to_thread(
+            subprocess.run,
+            cmd,
+            env=env,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout_seconds,
+            check=False,
         )
 
-        if process.returncode != 0:
-            error_msg = f"Ошибка выполнения команды (код {process.returncode}): {process.stderr}"
-            logging.error(error_msg)
-            if process.stdout:
-                logging.debug(f"stdout команды: {process.stdout}")
-            raise subprocess.CalledProcessError(process.returncode, cmd, process.stderr)
-
-        logging.debug(
-            f"Команда выполнена успешно. stdout: {process.stdout[:200]}..."
-        )  # Первые 200 символов
-
-    except subprocess.CalledProcessError as e:
-        logging.error(f"subprocess error: {e}")
+    except subprocess.TimeoutExpired:
+        logger.exception(
+            "Превышен таймаут выполнения %s",
+            cmd[0],
+        )
         raise
-    except Exception as e:
-        logging.error(f"Неожиданная ошибка при выполнении команды: {e}")
+
+    except Exception:
+        logger.exception(
+            "Не удалось выполнить %s",
+            cmd[0],
+        )
         raise
+
+    if process.returncode != 0:
+        logger.error(
+            "%s завершился с кодом %s: %s",
+            cmd[0],
+            process.returncode,
+            process.stderr,
+        )
+
+        raise subprocess.CalledProcessError(
+            returncode=process.returncode,
+            cmd=cmd,
+            output=process.stdout,
+            stderr=process.stderr,
+        )
+
+    if process.stderr:
+        logger.warning(
+            "Сообщения %s: %s",
+            cmd[0],
+            process.stderr,
+        )
+
+    logger.info("%s выполнен успешно", cmd[0])
 
 
 async def create_database_dump() -> str:
     db = settings.db
+
     file_name = generate_dump_name(db.database)
-    backups_dir = db.backups_dir
-    dump_file = os.path.join(backups_dir, file_name)
+    backups_dir = Path(db.backups_dir)
+    dump_path = backups_dir / file_name
 
-    logging.info(f"Начало создания дампа базы данных {db.database} в файл {dump_file}")
+    # mode применяется только при создании каталога;
+    # существующие права каталога не меняются.
+    backups_dir.mkdir(
+        mode=0o700,
+        parents=True,
+        exist_ok=True,
+    )
+
+    logger.info(
+        "Начало создания дампа базы %s: %s",
+        db.database,
+        file_name,
+    )
+
+    cmd = [
+        "pg_dump",
+        "--no-password",
+        "-U",
+        str(db.user),
+        "-h",
+        str(db.host),
+        "-p",
+        str(db.port),
+        "-F",
+        "c",
+        "-f",
+        str(dump_path),
+        str(db.database),
+    ]
 
     try:
-        os.makedirs(backups_dir, exist_ok=True)
-        os.chmod(backups_dir, 0o777)
-        logging.debug(f"Директория для бэкапов подготовлена: {backups_dir}")
-    except Exception as e:
-        logging.error(f"Ошибка при создании директории для бэкапов {backups_dir}: {e}")
+        with temporary_pgpass(db) as pgpass_path:
+            await run_command(
+                cmd,
+                pgpass_path,
+            )
+
+        if not dump_path.is_file() or dump_path.stat().st_size == 0:
+            raise RuntimeError("pg_dump не создал непустой файл дампа")
+
+        os.chmod(dump_path, 0o600)
+
+    except Exception:
+        logger.exception("Ошибка создания дампа")
+
+        try:
+            dump_path.unlink(missing_ok=True)
+        except OSError:
+            logger.exception("Не удалось удалить неполный файл дампа")
+
         raise
 
-    if os.name == "nt":  # Windows
-        pgpass_path = os.path.join(
-            os.getenv("APPDATA", ""), "postgresql", "pgpass.conf"
-        )
-    else:  # Linux/macOS
-        pgpass_path = os.path.expanduser("~/.pgpass")
-
-    logging.debug(f"Путь к pgpass файлу: {pgpass_path}")
-
-    try:
-        create_pgpass_file(pgpass_path, db)
-
-        cmd = [
-            "pg_dump",
-            "-U",
-            db.user,
-            "-h",
-            db.host,
-            "-p",
-            str(db.port),
-            "-F",
-            "c",
-            "-f",
-            dump_file,
-            db.database,
-        ]
-
-        await run_command(cmd, pgpass_path)
-        logging.info(f"Дамп базы данных успешно создан: {dump_file}")
-
-    except subprocess.CalledProcessError as e:
-        logging.error(f"Ошибка при выполнении pg_dump: {e}")
-        # Проверяем наличие файла дампа, возможно он создался частично
-        if os.path.exists(dump_file):
-            try:
-                os.remove(dump_file)
-                logging.debug(f"Частично созданный файл дампа удален: {dump_file}")
-            except Exception as remove_error:
-                logging.error(
-                    f"Не удалось удалить частично созданный файл дампа: {remove_error}"
-                )
-        raise
-    except Exception as e:
-        logging.error(f"Неожиданная ошибка при создании дампа: {e}")
-        raise
-    finally:
-        remove_pgpass_file(pgpass_path)
+    logger.info(
+        "Дамп базы успешно создан: %s",
+        file_name,
+    )
 
     return file_name
 
 
-async def restore_database_from_dump(dump_file: str) -> None:
+def validate_restore_dump(file_name: str) -> Path:
+    """
+    Разрешить восстановление только из непосредственного
+    непустого .dump-файла в каталоге резервных копий.
+    """
+    if (
+        not isinstance(file_name, str)
+        or not file_name
+        or "/" in file_name
+        or "\\" in file_name
+        or "\x00" in file_name
+    ):
+        raise ValueError("Недопустимое имя файла резервной копии")
+
+    root = Path(settings.db.backups_dir).resolve()
+    candidate = root / file_name
+
+    if candidate.is_symlink():
+        raise ValueError("Восстановление из символической ссылки запрещено")
+
+    path = candidate.resolve(strict=True)
+
+    if path.parent != root:
+        raise ValueError("Файл находится вне каталога резервных копий")
+
+    if path.suffix != ".dump":
+        raise ValueError("Ожидается файл с расширением .dump")
+
+    if not path.is_file():
+        raise ValueError("Резервная копия не является файлом")
+
+    if path.stat().st_size == 0:
+        raise ValueError("Файл резервной копии пуст")
+
+    return path
+
+
+async def restore_database_from_dump(
+    dump_file: str,
+) -> None:
+    """
+    Восстановить БД из доверенного локального дампа.
+
+    До вызова необходимо остановить бизнес-записи,
+    планировщик и конфликтующие фоновые задачи.
+    """
     db = settings.db
-    path_dump_file = Path(settings.db.backups_dir) / dump_file
+    dump_path = validate_restore_dump(dump_file)
 
-    logging.info(f"Начало восстановления базы данных из дампа: {path_dump_file}")
+    logger.warning(
+        "Начало восстановления базы %s из %s",
+        db.database,
+        dump_path.name,
+    )
 
-    if not path_dump_file.exists():
-        logging.error(f"Файл дампа {path_dump_file} не найден")
-        return None
-
-    if os.name == "nt":  # Windows
-        pgpass_path = os.path.join(
-            os.getenv("APPDATA", ""), "postgresql", "pgpass.conf"
-        )
-    else:  # Linux/macOS
-        pgpass_path = os.path.expanduser("~/.pgpass")
-
-    logging.debug(f"Путь к pgpass файлу: {pgpass_path}")
+    cmd = [
+        "pg_restore",
+        "--no-password",
+        "-U",
+        str(db.user),
+        "-h",
+        str(db.host),
+        "-p",
+        str(db.port),
+        "-d",
+        str(db.database),
+        "--clean",
+        "--if-exists",
+        "--single-transaction",
+        "--exit-on-error",
+        str(dump_path),
+    ]
 
     try:
-        create_pgpass_file(pgpass_path, db)
+        with temporary_pgpass(db) as pgpass_path:
+            await run_command(
+                cmd,
+                pgpass_path,
+            )
 
-        cmd = [
-            "pg_restore",
-            "-U",
-            db.user,
-            "-h",
-            db.host,
-            "-p",
-            str(db.port),
-            "-d",
-            db.database,
-            "-c",
-            "--if-exists",  # Добавляем флаг для избежания ошибок при отсутствии объектов
-            str(path_dump_file),
-        ]
-
-        logging.debug(f"Команда восстановления: {' '.join(cmd)}")
-        await run_command(cmd, pgpass_path)
-        logging.info(f"База данных успешно восстановлена из дампа {dump_file}")
-
-    except subprocess.CalledProcessError as e:
-        logging.error(f"Ошибка при выполнении pg_restore: {e}")
-        logging.error(
-            f"stderr: {e.stderr if hasattr(e, 'stderr') else 'Неизвестная ошибка'}"
+    except Exception:
+        logger.exception(
+            "Восстановление базы из %s завершилось ошибкой",
+            dump_path.name,
         )
         raise
-    except Exception as e:
-        logging.error(f"Неожиданная ошибка при восстановлении из дампа: {e}")
-        raise
-    finally:
-        remove_pgpass_file(pgpass_path)
+
+    logger.warning(
+        "Восстановление базы из %s успешно завершено",
+        dump_path.name,
+    )
 
 
 async def create_backup(task_name: str) -> str:
-    logging.info("=" * 50)
-    logging.info("Запуск процесса создания бэкапа")
+    logger.info("=" * 50)
+    logger.info("Запуск процесса создания бэкапа")
 
     try:
         dump_file = await create_database_dump()
 
-        logging.info(
+        logger.info(
             "Дамп создан: %s, копируем на Яндекс.Диск",
             dump_file,
         )
 
         async with worker_db_helper.async_session() as session:
             tokens_repo = YandexTokensRepository(session)
+
             yadisk = await create_yadisk_instance(
                 tokens_repo=tokens_repo,
             )
 
             await yadisk.copy_photos_to_disk(dump_file)
 
-            logging.info(
+            logger.info(
                 "Файл %s скопирован на Яндекс.Диск",
                 dump_file,
             )
 
             await worker_db_helper.synch_backups(session)
-            logging.debug("Синхронизация бэкапов завершена")
+            logger.debug("Синхронизация бэкапов завершена")
 
     except Exception as exc:
-        logging.exception("Критическая ошибка при создании бэкапа")
+        logger.exception("Критическая ошибка при создании бэкапа")
 
-        # Ошибка записи уведомления не должна скрыть исходную
-        # ошибку создания бэкапа.
+        # Сбой записи результата не должен скрыть
+        # исходное исключение.
         try:
             save_last_result(
                 name=task_name,
@@ -246,34 +357,27 @@ async def create_backup(task_name: str) -> str:
                 message=f"{type(exc).__name__}: {exc}",
             )
         except Exception:
-            logging.exception(
-                "Не удалось сохранить сообщение об ошибке бэкапа"
-            )
+            logger.exception("Не удалось сохранить сообщение " "об ошибке бэкапа")
 
         raise
 
     else:
-        # Сбой записи уведомления не превращает успешно
-        # созданный бэкап в неуспешный.
+        # Ошибка уведомления не превращает
+        # успешно созданный бэкап в неуспешный.
         try:
             save_last_result(
                 name=task_name,
                 ok=True,
-                message=(
-                    "Бэкап создан и загружен на Яндекс.Диск: "
-                    f"{dump_file}"
-                ),
+                message=("Бэкап создан и загружен на Яндекс.Диск: " f"{dump_file}"),
             )
         except Exception:
-            logging.exception(
-                "Бэкап создан, но не удалось сохранить уведомление"
-            )
+            logger.exception("Бэкап создан, но не удалось " "сохранить уведомление")
 
-        logging.info(
+        logger.info(
             "Бэкап завершён. Результат: %s",
             dump_file,
         )
-        logging.info("=" * 50)
+        logger.info("=" * 50)
 
         return dump_file
 
@@ -281,7 +385,7 @@ async def create_backup(task_name: str) -> str:
         try:
             redis_client.delete(task_name)
         except Exception:
-            logging.exception(
+            logger.exception(
                 "Не удалось удалить блокировку бэкапа %s. "
                 "Она останется до истечения TTL.",
                 task_name,

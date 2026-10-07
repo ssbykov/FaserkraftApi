@@ -170,7 +170,7 @@ class Settings(BaseSettings):
 
 ENV_MAP = {
     "dev": ROOT.parent / ".env_dev",
-    "prod": ROOT.parent / ".env_dev",
+    "prod": ROOT.parent / ".env",
 }
 
 
