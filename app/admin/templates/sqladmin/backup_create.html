@@ -1,0 +1,31 @@
+{% extends "sqladmin/layout.html" %}
+
+{% block content %}
+<div class="card">
+  <div class="card-header">
+    <h3 class="card-title">Создание резервной копии</h3>
+  </div>
+
+  <div class="card-body">
+    <p>
+      Будет создан дамп базы данных и выполнена загрузка
+      на Яндекс.Диск.
+    </p>
+
+    <form
+      method="POST"
+      action="{{ url_for('admin:create', identity=model_view.identity) }}">
+
+      <button type="submit" class="btn btn-primary">
+        Запустить бэкап
+      </button>
+
+      <a
+        class="btn btn-secondary"
+        href="{{ url_for('admin:list', identity=model_view.identity) }}">
+        Отмена
+      </a>
+    </form>
+  </div>
+</div>
+{% endblock %}

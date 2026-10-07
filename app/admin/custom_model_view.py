@@ -9,6 +9,7 @@ from starlette.responses import RedirectResponse
 from app.core.type_vars import T
 from app.database.crud.mixines import GetBackNextIdMixin
 from app.database import db_helper
+from app.admin.utils import check_superuser
 
 
 class CustomModelView(ModelView, Generic[T]):
@@ -25,34 +26,67 @@ class CustomModelView(ModelView, Generic[T]):
         redirect_url = await self._get_redirect_url(request)
         return RedirectResponse(redirect_url, status_code=303)
 
-    async def _get_redirect_url(self, request: Request, is_next: bool = True) -> str:
-        referer = request.headers.get("referer", "")
-        current_id = request.query_params.get("pks")
-        if not current_id:
-            return referer
-        async for session in db_helper.get_session():
+    async def _get_redirect_url(
+        self,
+        request: Request,
+        is_next: bool = True,
+    ) -> str:
+        list_url = str(
+            request.url_for(
+                "admin:list",
+                identity=self.identity,
+            )
+        )
+
+        raw_id = request.query_params.get("pks")
+
+        try:
+            current_id = int(raw_id) if raw_id else None
+        except ValueError:
+            return list_url
+
+        if current_id is None or current_id <= 0:
+            return list_url
+
+        async with db_helper.async_session() as session:
             repo = self.repo_type(session)
-            if column := self._get_default_sort()[0]:
-                sort_column = column[0]
-                current_val = getattr(
-                    await repo.get_by_id(int(current_id)), sort_column
-                )
+            current = await repo.get_by_id(current_id)
+
+            if current is None:
+                return list_url
+
+            default_sort = self._get_default_sort()
+
+            if default_sort:
+                sort_column = default_sort[0][0]
+                current_val = getattr(current, sort_column)
             else:
                 sort_column = "id"
-                current_val = int(current_id)
+                current_val = current_id
 
-            url_id = await repo.get_adjacent_id(
+            adjacent_id = await repo.get_adjacent_id(
                 current_val=current_val,
                 list_query=cast(ModelView, self).list_query(request),
                 sort_column=sort_column,
                 is_next=is_next,
             )
 
-            if url_id:
-                last_slash_index = referer.rfind("/")
-                redirect_url = referer[: last_slash_index + 1] + str(url_id)
-                return redirect_url
-        return referer
+        if adjacent_id:
+            return str(
+                request.url_for(
+                    "admin:details",
+                    identity=self.identity,
+                    pk=adjacent_id,
+                )
+            )
+
+        return str(
+            request.url_for(
+                "admin:details",
+                identity=self.identity,
+                pk=current_id,
+            )
+        )
 
     async def get_count_items(self, request: Request) -> int | None:
         async for session in db_helper.get_session():
@@ -86,7 +120,6 @@ class CustomModelView(ModelView, Generic[T]):
         count_stmt = select(func.count()).select_from(stmt.subquery())
         rows = await self._run_query(count_stmt)
         return rows[0]
-
 
     async def get_item_position(self, request: Request) -> dict[str, int | Any]:
         async for session in db_helper.get_session():
@@ -134,3 +167,9 @@ class CustomModelView(ModelView, Generic[T]):
 
     async def check_restrictions_delete(self, request: Request) -> str | None:
         pass
+
+    def is_visible(self, request: Request) -> bool:
+        return check_superuser(request)
+
+    def is_accessible(self, request: Request) -> bool:
+        return check_superuser(request)

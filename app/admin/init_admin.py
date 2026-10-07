@@ -1,4 +1,7 @@
-import os
+import logging
+from pathlib import Path
+
+from app.admin.utils import check_superuser
 from typing import Any, cast, Sequence, Awaitable, Iterable
 
 from sqladmin import Admin
@@ -15,9 +18,9 @@ from starlette.requests import Request
 from starlette.responses import Response, RedirectResponse, JSONResponse
 
 from app.core import settings
+from app.core.backup_status import get_backup_status
 from app.database import db_helper, Process, StepDefinition, DailyPlan
 from app.database.crud.employees import get_employee_repo
-from app.core.backup_status import get_backup_status
 from .backend import AdminAuth
 from .custom_model_view import CustomModelView
 from .model_views import (
@@ -72,8 +75,6 @@ async def init_admin(app: Any) -> "NewAdmin":
     admin.add_view(DeviceAdmin)
     admin.add_view(DailyPlanAdmin)
     admin.add_view(DailyPlanStepAdmin)
-    assert isinstance(admin.authentication_backend, AdminAuth)
-    await admin.authentication_backend.create_superuser()
 
     return admin
 
@@ -143,19 +144,29 @@ class NewAdmin(Admin):
     async def login(self, request: Request) -> Response:
         assert isinstance(self.authentication_backend, AdminAuth)
 
-        context: dict[str, str | None] = {}
         if request.method == "GET":
-            return await self.templates.TemplateResponse(request, "sqladmin/login.html")
-
-        response = await self.authentication_backend.login_with_info(request)
-        if not response.is_ok:
-            context["error"] = response.error
-            context["message"] = response.message
             return await self.templates.TemplateResponse(
-                request, "sqladmin/login.html", context, status_code=400
+                request,
+                "sqladmin/login.html",
             )
-        await db_helper.synch_backups()
-        return RedirectResponse(request.url_for("admin:index"), status_code=302)
+
+        result = await self.authentication_backend.login_with_info(request)
+
+        if not result.is_ok:
+            return await self.templates.TemplateResponse(
+                request,
+                "sqladmin/login.html",
+                {
+                    "error": result.error,
+                    "message": result.message,
+                },
+                status_code=400,
+            )
+
+        return RedirectResponse(
+            request.url_for("admin:index"),
+            status_code=303,
+        )
 
     @login_required
     async def details(self, request: Request) -> Response:
@@ -344,40 +355,111 @@ class NewAdmin(Admin):
     def find_custom_model_view(self, identity: str) -> CustomModelView[Any]:
         return cast(CustomModelView[Any], self._find_model_view(identity))
 
+    @login_required
     async def delete(self, request: Request) -> Response:
+        if not check_superuser(request):
+            raise HTTPException(
+                status_code=403,
+                detail="Доступ запрещён",
+            )
+
         identity = request.path_params["identity"]
         model_view = self.find_custom_model_view(identity)
+
+        if not model_view.is_accessible(request):
+            raise HTTPException(
+                status_code=403,
+                detail="Доступ запрещён",
+            )
+
+        if not model_view.can_delete:
+            raise HTTPException(
+                status_code=403,
+                detail="Удаление запрещено",
+            )
 
         restriction = await model_view.check_restrictions_delete(request)
 
         if restriction:
-            raise HTTPException(detail=restriction, status_code=409)
+            raise HTTPException(
+                status_code=409,
+                detail=restriction,
+            )
+
+        backup_paths: list[Path] = []
 
         if isinstance(model_view, BackupDbAdmin):
-            pks_raw = request.query_params["pks"]
-            backup_ids = [int(pk) for pk in pks_raw.split(",") if pk]
+            raw_pks = request.query_params.get("pks", "")
+
+            try:
+                backup_ids = [int(value) for value in raw_pks.split(",") if value]
+            except ValueError:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Некорректные идентификаторы",
+                )
+
+            if not backup_ids or any(pk <= 0 for pk in backup_ids):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Некорректные идентификаторы",
+                )
+
+            root = Path(settings.db.backups_dir).resolve()
 
             for backup_id in backup_ids:
-                if backup_db := await model_view.get_by_id(backup_id):
-                    file_path = os.path.join(settings.db.backups_dir, backup_db.name)
-                    try:
-                        if os.path.exists(file_path):
-                            os.remove(file_path)
-                    except OSError as file_err:
-                        # не блокируем удаление записи из БД из-за проблемы с файлом
-                        pass
+                backup = await model_view.get_by_id(backup_id)
+                if backup is None:
+                    continue
+
+                path = (root / backup.name).resolve()
+
+                # Разрешаем удаление только непосредственного
+                # файла в каталоге резервных копий.
+                if path.parent != root or path.suffix != ".dump":
+                    logging.error(
+                        "Отклонён путь резервной копии: backup_id=%s",
+                        backup_id,
+                    )
+
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Недопустимый путь резервной копии",
+                    )
+
+                backup_paths.append(path)
+
         try:
             result = await super().delete(request)
-            return cast(Response, result)
-        except Exception as e:
-            if isinstance(e, IntegrityError):
-                restriction = "Данная запись не может быть удалена из на нарушения целостности базы."
-            else:
-                restriction = str(e)
+
+        except IntegrityError:
+            logging.exception("Нарушение целостности при удалении в SQLAdmin")
             return Response(
                 status_code=409,
-                content=restriction,
+                content="Удаление нарушает связи данных.",
             )
+
+        except HTTPException:
+            raise
+
+        except Exception:
+            logging.exception("Ошибка удаления в SQLAdmin")
+            return Response(
+                status_code=500,
+                content="Не удалось удалить запись.",
+            )
+
+        # Файлы удаляем только после успешного ответа родителя.
+        if result.status_code < 400:
+            for path in backup_paths:
+                try:
+                    path.unlink(missing_ok=True)
+                except OSError:
+                    logging.exception(
+                        "Запись удалена, но файл бэкапа удалить не удалось"
+                    )
+
+        return cast(Response, result)
 
     @login_required
     async def create(self, request: Request) -> Response:
@@ -388,9 +470,28 @@ class NewAdmin(Admin):
 
         # --- спец-обработка BackupDbAdmin ---
         if isinstance(model_view, BackupDbAdmin):
-            request.session["flash_messages"] = await model_view.create_backup()
-            url = request.url_for("admin:list", identity=identity)
-            return RedirectResponse(url=url, status_code=302)
+            if request.method == "GET":
+                return await self.templates.TemplateResponse(
+                    request,
+                    "sqladmin/backup_create.html",
+                    {"model_view": model_view},
+                )
+
+            if request.method != "POST":
+                raise HTTPException(status_code=405)
+
+            if not check_superuser(request):
+                raise HTTPException(status_code=403)
+
+            message = await model_view.create_backup()
+
+            if message:
+                request.session["flash_messages"] = message
+
+            return RedirectResponse(
+                request.url_for("admin:list", identity=identity),
+                status_code=303,
+            )
 
         Form = await model_view.scaffold_form(model_view._form_create_rules)
         context = {

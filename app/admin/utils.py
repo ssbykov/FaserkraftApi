@@ -1,4 +1,4 @@
-from typing import Callable, Type, Any
+from typing import Any, Callable, Type
 from zoneinfo import ZoneInfo
 
 from markupsafe import Markup
@@ -10,23 +10,44 @@ from app.database import BaseWithId
 
 
 def check_superuser(request: Request) -> bool:
-    return bool(request.session.get("user", {}).get("is_superuser"))
+    user = getattr(request.state, "admin_user", None)
+
+    return bool(
+        user
+        and user.is_active
+        and user.is_verified
+        and user.is_superuser
+    )
 
 
 def text_formater(
     model: Type[BaseWithId],
-) -> dict[str | InstrumentedAttribute[Any], Callable[[Any, Any], Any]]:
-    formater = lambda m, f: Markup(
-        f"<div style='white-space: pre-wrap; max-width: 800px;'>{getattr(m, f)}</div>"
-    )
-    columns = list(model.__table__.columns)
+) -> dict[
+    str | InstrumentedAttribute[Any],
+    Callable[[Any, Any], Any],
+]:
+    def formatter(obj: Any, field: Any) -> Markup:
+        value = getattr(obj, field, None)
+        text = "" if value is None else str(value)
+
+        return Markup(
+            "<div style='white-space: pre-wrap; "
+            "max-width: 800px;'>{}</div>"
+        ).format(text)
+
     return {
-        column.name: formater for column in columns if isinstance(column.type, Text)
+        column.name: formatter
+        for column in model.__table__.columns
+        if isinstance(column.type, Text)
     }
 
 
-def format_datetime(obj, param: str) -> str:
+def format_datetime(obj: Any, param: str) -> str:
     dt = getattr(obj, param, None)
-    if dt is not None:
-        return dt.astimezone(ZoneInfo("Europe/Moscow")).strftime("%Y-%m-%d %H:%M:%S")
-    return ""
+
+    if dt is None:
+        return ""
+
+    return dt.astimezone(
+        ZoneInfo("Europe/Moscow")
+    ).strftime("%Y-%m-%d %H:%M:%S")
