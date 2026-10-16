@@ -4,9 +4,11 @@ from .base import BaseWithId, Base
 from .daily_plan import DailyPlan
 from .daily_plan_step import DailyPlanStep
 from .device import Device
+from .device_invitation import DeviceInvitation
 from .employee import Employee
 from .employee_norm_calculation import EmployeeNormCalculation
 from .inventory import Inventory, InventoryItem
+from .mobile_session import MobileSession
 from .order import Order, OrderItem
 from .packaging_box import Packaging
 from .process import Process
@@ -43,4 +45,6 @@ __all__ = [
     "OrderItem",
     "Inventory",
     "InventoryItem",
+    "DeviceInvitation",
+    "MobileSession",
 ]

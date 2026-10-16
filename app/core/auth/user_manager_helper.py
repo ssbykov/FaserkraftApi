@@ -62,8 +62,11 @@ class UserManagerHelper:
     async def get_user_by_id(
         user_manager: "UserManager",
         user_id: int,
-    ) -> User:
-        return await user_manager.get(id=user_id)
+    ) -> User | None:
+        try:
+            return await user_manager.get(id=user_id)
+        except UserNotExists:
+            return None
 
     @staticmethod
     @with_user_manager

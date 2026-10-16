@@ -2,6 +2,8 @@ from datetime import datetime
 from typing import ClassVar, Type
 from zoneinfo import ZoneInfo
 
+from pydantic import Field
+
 from app.database import BaseSchema
 from app.database.models import Device
 
@@ -14,7 +16,11 @@ class DeviceBase(BaseSchema):
 
 class DeviceCreate(DeviceBase):
     is_active: bool = True
-    created_at: datetime = datetime.now(ZoneInfo("Europe/Moscow"))
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(
+            ZoneInfo("Europe/Moscow")
+        )
+    )
     base_class: ClassVar[Type[Device]] = Device
 
 
@@ -24,7 +30,7 @@ class DeviceRead(DeviceBase):
     model_config = {"from_attributes": True}
 
 
-class DeviceRegister(DeviceCreate):
+class DeviceRegister(DeviceBase):
     token: str
     password: str
     user_id: int

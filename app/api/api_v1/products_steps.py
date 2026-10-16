@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from starlette import status
 
 from app.api.api_v1.dependencies import get_current_employee
+from app.api.dependencies.mobile_sessions import get_current_mobile_employee
 from app.core import settings
 from app.database.crud.daily_plans import DailyPlanRepository, get_daily_plan_repo
 from app.database.crud.products import get_product_repo, ProductRepository
@@ -33,18 +34,18 @@ async def accept_step(
     repo: Annotated[ProductStepRepository, Depends(get_products_steps_repo)],
     day_plan_repo: Annotated[DailyPlanRepository, Depends(get_daily_plan_repo)],
     product_repo: Annotated[ProductRepository, Depends(get_product_repo)],
-    employee: Annotated[EmployeeRead, Depends(get_current_employee)],
+    employee: Annotated[EmployeeRead, Depends(get_current_mobile_employee)],
     plan_date: date | None = None,
 ) -> Optional[ProductRead]:
     try:
         # Учли и admin, и master
-        if (
-            employee.role not in [Role.admin, Role.master]
-            and not await day_plan_repo.check_step_in_daily_plan(
-                date=plan_date if plan_date else date.today(),
-                employee_id=employee.id,
-                product_step_id=step_id,
-            )
+        if employee.role not in [
+            Role.admin,
+            Role.master,
+        ] and not await day_plan_repo.check_step_in_daily_plan(
+            date=plan_date if plan_date else date.today(),
+            employee_id=employee.id,
+            product_step_id=step_id,
         ):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -82,13 +83,13 @@ async def change_step_performer(
     plan_date: date | None = None,
 ) -> Optional[ProductRead]:
     try:
-        if (
-            employee.role not in [Role.admin, Role.master]
-            and not await day_plan_repo.check_step_in_daily_plan(
-                date=plan_date if plan_date else date.today(),
-                employee_id=employee.id,
-                product_step_id=step_id,
-            )
+        if employee.role not in [
+            Role.admin,
+            Role.master,
+        ] and not await day_plan_repo.check_step_in_daily_plan(
+            date=plan_date if plan_date else date.today(),
+            employee_id=employee.id,
+            product_step_id=step_id,
         ):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -116,6 +117,7 @@ async def change_step_performer(
             status_code=500,
             detail=f"Произошла внутренняя ошибка {e}",
         )
+
 
 @router.post(
     "/reset",

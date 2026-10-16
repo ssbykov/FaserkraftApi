@@ -3,14 +3,13 @@ from typing import List, Annotated, Sequence
 from fastapi import APIRouter, HTTPException, Depends
 from starlette import status
 
-from app.api.api_v1.fastapi_users import current_user
+from app.api.api_v1.dependencies import get_current_employee
 from app.core import settings
 from app.database import StepDefinition
 from app.database.crud.step_definitions import (
     StepDefinitionRepository,
     get_step_definition_repo,
 )
-from app.database.models import User
 from app.database.schemas.step_definition import StepDefinitionRead
 
 router = APIRouter(
@@ -23,10 +22,10 @@ router = APIRouter(
     "/",
     response_model=List[StepDefinitionRead],
     status_code=status.HTTP_200_OK,
+    dependencies=[Depends(get_current_employee)],
 )
 async def get_step_definitions(
     repo: Annotated[StepDefinitionRepository, Depends(get_step_definition_repo)],
-    user: Annotated[User, Depends(current_user)],
 ) -> Sequence[StepDefinition]:
     try:
         return await repo.get_all()
@@ -37,5 +36,5 @@ async def get_step_definitions(
         # внутренняя ошибка без лишних деталей наружу
         raise HTTPException(
             status_code=500,
-            detail="Произошла внутренняя ошибка при получении продукта",
+            detail="Произошла внутренняя ошибка при получении определений этапов",
         )

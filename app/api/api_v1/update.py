@@ -3,7 +3,7 @@ from typing import Annotated, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 
-from api.api_v1.dependencies import get_current_employee
+from app.api.api_v1.dependencies import get_current_employee_legacy
 from core import settings
 from database.schemas.app_update import VersionInfoResponse
 from database.schemas.employee import EmployeeRead
@@ -17,7 +17,7 @@ router = APIRouter(
 
 @router.get("/version", response_model=VersionInfoResponse)
 async def get_latest_version(
-    employee: Annotated[EmployeeRead, Depends(get_current_employee)],
+    employee: Annotated[EmployeeRead, Depends(get_current_employee_legacy)],
 ) -> Optional[VersionInfoResponse]:
     try:
         release = load_release_info()
@@ -35,7 +35,7 @@ async def get_latest_version(
 
 @router.get("/download")
 async def download_apk(
-    employee: Annotated[EmployeeRead, Depends(get_current_employee)],
+    employee: Annotated[EmployeeRead, Depends(get_current_employee_legacy)],
 ) -> FileResponse:
     try:
         release = load_release_info()

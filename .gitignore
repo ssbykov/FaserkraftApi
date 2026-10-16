@@ -78,6 +78,8 @@ ENV/
 .idea/**/dataSources.local.xml
 .idea/**/sqlDataSources.xml
 .idea/**/dynamic.xml
+.idea/
+.backups/
 
 # Visual Studio Code #
 .vscode/*
