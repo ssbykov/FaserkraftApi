@@ -1,12 +1,16 @@
 from typing import Annotated
 
 from fastapi import Depends, HTTPException
+from fastapi.security import HTTPAuthorizationCredentials
 from starlette import status
 
-from app.api.api_v1.fastapi_users import current_user
+from app.api.api_v1.fastapi_users import current_user, current_user_optional
 from app.api.dependencies.mobile_sessions import (
     get_current_mobile_employee,
+    mobile_bearer,
+    unauthorized,
 )
+from app.database import SessionDep
 from app.database.crud.employees import (
     EmployeeRepository,
     get_employee_repo,
@@ -33,6 +37,26 @@ async def get_current_employee(
     employee: Annotated[EmployeeRead, Depends(get_current_mobile_employee)],
 ) -> EmployeeRead:
     return employee
+
+
+async def get_current_employee_any(
+    session: SessionDep,
+    credentials: Annotated[
+        HTTPAuthorizationCredentials | None,
+        Depends(mobile_bearer),
+    ],
+    user: Annotated[User | None, Depends(current_user_optional)],
+    employee_repo: Annotated[EmployeeRepository, Depends(get_employee_repo)],
+) -> EmployeeRead:
+    if credentials is not None:
+        try:
+            return await get_current_mobile_employee(session, credentials)
+        except HTTPException as exc:
+            if exc.status_code != status.HTTP_401_UNAUTHORIZED:
+                raise
+    if user is not None:
+        return await get_current_employee_legacy(user, employee_repo)
+    raise unauthorized()
 
 
 async def require_admin_or_master(

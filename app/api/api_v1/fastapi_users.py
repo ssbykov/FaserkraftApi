@@ -11,6 +11,11 @@ fastapi_users = FastAPIUsers[User, int](
 
 
 current_user = fastapi_users.current_user(active=True, verified=True)
+current_user_optional = fastapi_users.current_user(
+    active=True,
+    verified=True,
+    optional=True,
+)
 current_super_user = fastapi_users.current_user(
     superuser=True,
     active=True,

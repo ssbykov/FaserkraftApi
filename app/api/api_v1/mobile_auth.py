@@ -1,13 +1,17 @@
+import json
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
 
 from app.api.api_v1.fastapi_users import current_user
 from app.api.dependencies.mobile_sessions import (
     get_current_mobile_employee,
+    require_mobile_admin_or_master,
 )
 from app.core import settings
-from app.database.models import User
+from app.database import SessionDep
+from app.database.models import Employee, User
 from app.database.schemas.employee import EmployeeRead
 from app.database.schemas.mobile import (
     MobileDeviceRegistered,
@@ -17,6 +21,7 @@ from app.database.schemas.mobile import (
 )
 from app.services.device_invitations import (
     DeviceInvitationError,
+    DeviceInvitationResult,
     issue_device_invitation,
 )
 from app.services.mobile_registration import (
@@ -68,6 +73,25 @@ def _map_registration_error(exc: MobileRegistrationError) -> HTTPException:
     return HTTPException(status_code=status_code, detail=detail)
 
 
+def _build_invitation_response(
+    result: DeviceInvitationResult,
+) -> MobileInvitationIssued:
+    qr_payload = json.dumps(
+        {
+            "employee_id": result.employee_id,
+            "invitation_token": result.invitation_token,
+        },
+        separators=(",", ":"),
+    )
+    return MobileInvitationIssued(
+        invitation_id=result.invitation_id,
+        employee_id=result.employee_id,
+        invitation_token=result.invitation_token,
+        expires_at=result.expires_at,
+        qr_payload=qr_payload,
+    )
+
+
 @router.post(
     "/invitations",
     response_model=MobileInvitationIssued,
@@ -85,18 +109,37 @@ async def create_device_invitation(
     except DeviceInvitationError as exc:
         raise _map_invitation_error(exc) from exc
 
-    qr_payload = (
-        f'{{"employee_id":{result.employee_id},'
-        f'"invitation_token":"{result.invitation_token}"}}'
-    )
+    return _build_invitation_response(result)
 
-    return MobileInvitationIssued(
-        invitation_id=result.invitation_id,
-        employee_id=result.employee_id,
-        invitation_token=result.invitation_token,
-        expires_at=result.expires_at,
-        qr_payload=qr_payload,
+
+@router.post(
+    "/invitations/by-mobile",
+    response_model=MobileInvitationIssued,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_device_invitation_by_mobile(
+    payload: MobileInvitationIssue,
+    session: SessionDep,
+    employee: Annotated[EmployeeRead, Depends(require_mobile_admin_or_master)],
+) -> MobileInvitationIssued:
+    actor_user_id = await session.scalar(
+        select(Employee.user_id).where(Employee.id == employee.id)
     )
+    if actor_user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="INVITATION_FORBIDDEN",
+        )
+
+    try:
+        result = await issue_device_invitation(
+            actor_user_id=actor_user_id,
+            employee_id=payload.employee_id,
+        )
+    except DeviceInvitationError as exc:
+        raise _map_invitation_error(exc) from exc
+
+    return _build_invitation_response(result)
 
 
 @router.post(
