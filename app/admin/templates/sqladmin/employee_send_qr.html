@@ -1,0 +1,24 @@
+{% extends "sqladmin/layout.html" %}
+{% block content %}
+<div class="col-12">
+  <div class="card">
+    <div class="card-header">
+      <h3 class="card-title">Отправка QR-кода</h3>
+    </div>
+    <div class="card-body">
+      <p>Сотрудник: <strong>{{ employee_name }}</strong></p>
+      <p>
+        QR-код приглашения будет отправлен на {{ email }}. Он действует
+        10 минут и срабатывает один раз. Ранее выданные приглашения для этого
+        сотрудника будут отозваны.
+      </p>
+      <form method="post" action="{{ url_for('admin:employee_send_qr', pk=employee_id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+        <a href="{{ url_for('admin:details', identity='employee', pk=employee_id) }}"
+           class="btn btn-secondary">Отмена</a>
+        <button type="submit" class="btn btn-primary">Отправить QR-код</button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

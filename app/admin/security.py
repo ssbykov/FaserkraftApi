@@ -45,7 +45,7 @@ def csrf_token(request: Request) -> str:
 
 
 class AdminRequestProtectionMiddleware:
-    SAFE_ACTIONS = frozenset({"back", "next"})
+    SAFE_ACTIONS = frozenset({"back", "next", "send-qr"})
 
     def __init__(self, app):
         self.app = app

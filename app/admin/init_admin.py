@@ -1,6 +1,7 @@
 import logging
 from pathlib import Path
 from typing import Any, Awaitable, Iterable, Sequence, cast
+from urllib.parse import quote
 
 from sqladmin import Admin
 from sqladmin._types import ENGINE_TYPE
@@ -21,7 +22,12 @@ from app.core import settings
 from app.core.backup_status import get_backup_status
 from app.database import DailyPlan, Process, StepDefinition, db_helper
 from app.database.crud.employees import get_employee_repo
-
+from app.services.device_invitations import (
+    DeviceInvitationError,
+    issue_device_invitation,
+)
+from app.tasks import run_process_mail
+from app.utils.qr_code_gentrator import generate_qr_code
 from .backend import AdminAuth
 from .custom_model_view import CustomModelView
 from .model_views import (
@@ -43,7 +49,6 @@ from .model_views import (
     UserAdmin,
 )
 from .model_views.size_type import SizeTypeAdmin
-
 
 logger = logging.getLogger(__name__)
 
@@ -89,6 +94,15 @@ async def init_admin(app: Any) -> "NewAdmin":
 
 
 class NewAdmin(Admin):
+    INVITATION_ERROR_TEXT = {
+        "INVITATION_FORBIDDEN": "Недостаточно прав для выдачи приглашения.",
+        "EMPLOYEE_NOT_FOUND": "Сотрудник не найден.",
+        "EMPLOYEE_HAS_NO_USER": "У сотрудника нет привязанного пользователя.",
+        "RECIPIENT_NOT_ALLOWED": (
+            "Пользователь сотрудника должен быть активен и верифицирован."
+        ),
+    }
+
     def __init__(
         self,
         app: Starlette,
@@ -116,6 +130,21 @@ class NewAdmin(Admin):
             authentication_backend=authentication_backend,
         )
 
+        # Отправка QR-кода сотруднику: страница подтверждения (GET)
+        # и защищённая отправка (POST с CSRF-токеном).
+        self.admin.add_route(
+            "/employee/send-qr/{pk:int}",
+            self.employee_send_qr_form,
+            methods=["GET"],
+            name="employee_send_qr_form",
+        )
+        self.admin.add_route(
+            "/employee/send-qr/{pk:int}",
+            self.employee_send_qr,
+            methods=["POST"],
+            name="employee_send_qr",
+        )
+
         async def http_exception(
             request: Request,
             exc: Exception,
@@ -126,10 +155,8 @@ class NewAdmin(Admin):
             detail = exc.detail
 
             is_ajax = (
-                request.headers.get("x-requested-with")
-                == "XMLHttpRequest"
-                or "application/json"
-                in request.headers.get("accept", "")
+                request.headers.get("x-requested-with") == "XMLHttpRequest"
+                or "application/json" in request.headers.get("accept", "")
                 or request.method == "DELETE"
             )
 
@@ -218,6 +245,138 @@ class NewAdmin(Admin):
             context,
         )
 
+    # ------------------------------------------------------------------
+    # Отправка QR-кода приглашения сотруднику
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _flash_error(url: str, message: str) -> RedirectResponse:
+        return RedirectResponse(
+            f"{url}?flash_error={quote(message)}",
+            status_code=303,
+        )
+
+    @staticmethod
+    async def _employee_qr_target(
+        pk: int,
+    ) -> tuple[str | None, str | None, str | None]:
+        """Вернуть (имя сотрудника, email пользователя, текст ошибки)."""
+        # Импорт внутри метода: иначе возникает циклический импорт
+        # app.core.auth.user_manager_helper <-> app.api.
+        from app.core.auth.user_manager_helper import UserManagerHelper
+
+        async with db_helper.async_session() as session:
+            employee = await get_employee_repo(session).get_by_id(pk)
+
+            if employee is None:
+                return None, None, "Сотрудник не найден."
+
+            name, user_id = employee.name, employee.user_id
+
+        if user_id is None:
+            return name, None, "У сотрудника нет привязанного пользователя."
+
+        user = await UserManagerHelper().get_user_by_id(user_id=user_id)
+
+        if user is None or not user.is_active or not user.is_verified:
+            return (
+                name,
+                None,
+                "Нельзя отправить QR-код: пользователь должен быть "
+                "активен и верифицирован.",
+            )
+
+        return name, user.email, None
+
+    @login_required
+    async def employee_send_qr_form(self, request: Request) -> Response:
+        if not check_superuser(request):
+            raise HTTPException(
+                status_code=403,
+                detail="Доступ запрещён",
+            )
+
+        pk = int(request.path_params["pk"])
+        details_url = str(request.url_for("admin:details", identity="employee", pk=pk))
+
+        name, email, error = await self._employee_qr_target(pk)
+
+        if error or email is None:
+            return self._flash_error(details_url, error or "Ошибка.")
+
+        return await self.templates.TemplateResponse(
+            request,
+            "sqladmin/employee_send_qr.html",
+            {
+                "employee_id": pk,
+                "employee_name": name,
+                "email": email,
+            },
+        )
+
+    @login_required
+    async def employee_send_qr(self, request: Request) -> Response:
+        if not check_superuser(request):
+            raise HTTPException(
+                status_code=403,
+                detail="Доступ запрещён",
+            )
+
+        pk = int(request.path_params["pk"])
+        details_url = str(request.url_for("admin:details", identity="employee", pk=pk))
+
+        admin_user = getattr(request.state, "admin_user", None)
+
+        if admin_user is None:
+            return self._flash_error(
+                details_url,
+                "Не удалось определить администратора.",
+            )
+
+        _, email, error = await self._employee_qr_target(pk)
+
+        if error or email is None:
+            return self._flash_error(details_url, error or "Ошибка.")
+
+        try:
+            result = await issue_device_invitation(
+                actor_user_id=admin_user.id,
+                employee_id=pk,
+            )
+        except DeviceInvitationError as exc:
+            return self._flash_error(
+                details_url,
+                self.INVITATION_ERROR_TEXT.get(
+                    exc.code,
+                    "Не удалось создать приглашение.",
+                ),
+            )
+
+        qr_code_bytes = generate_qr_code(
+            {
+                "employee_id": result.employee_id,
+                "invitation_token": result.invitation_token,
+            }
+        )
+
+        run_process_mail.delay(
+            None,
+            context={
+                "name": email,
+                "user_email": email,
+                "qr_code_bytes": qr_code_bytes,
+            },
+            action="send_qr",
+        )
+
+        request.session["flash_messages"] = f"QR-код отправлен на {email}"
+
+        return RedirectResponse(details_url, status_code=303)
+
+    # ------------------------------------------------------------------
+    # Ежедневные планы
+    # ------------------------------------------------------------------
+
     @staticmethod
     async def _fill_daily_plan_choices(form: Any) -> None:
         async with db_helper.async_session() as session:
@@ -226,24 +385,16 @@ class NewAdmin(Admin):
 
             if hasattr(form, "employee_id"):
                 form.employee_id.choices = [
-                    (employee.id, str(employee))
-                    for employee in employees
+                    (employee.id, str(employee)) for employee in employees
                 ]
 
             processes = (
-                (
-                    await session.execute(
-                        select(Process).order_by(Process.name)
-                    )
-                )
+                (await session.execute(select(Process).order_by(Process.name)))
                 .scalars()
                 .all()
             )
 
-            process_choices = [
-                (process.id, process.name)
-                for process in processes
-            ]
+            process_choices = [(process.id, process.name) for process in processes]
 
             steps = (
                 (
@@ -274,26 +425,19 @@ class NewAdmin(Admin):
             if hasattr(form, "step_definition_id"):
                 form.step_definition_id.choices = step_choices
 
-            if (
-                hasattr(form, "steps")
-                and isinstance(form.steps, Iterable)
-            ):
+            if hasattr(form, "steps") and isinstance(form.steps, Iterable):
                 for subform in form.steps:
                     if not hasattr(subform, "form"):
                         continue
 
                     if hasattr(subform.form, "process_id"):
-                        subform.form.process_id.choices = (
-                            process_choices
-                        )
+                        subform.form.process_id.choices = process_choices
 
                     if hasattr(
                         subform.form,
                         "step_definition_id",
                     ):
-                        subform.form.step_definition_id.choices = (
-                            step_choices
-                        )
+                        subform.form.step_definition_id.choices = step_choices
 
             processes_json = [
                 {
@@ -344,24 +488,16 @@ class NewAdmin(Admin):
             subform = form.steps[index].form
 
             if hasattr(subform, "process_id"):
-                subform.process_id.data = (
-                    step.step_definition.process_id
-                )
+                subform.process_id.data = step.step_definition.process_id
 
             if hasattr(subform, "step_definition_id"):
-                subform.step_definition_id.data = (
-                    step.step_definition_id
-                )
+                subform.step_definition_id.data = step.step_definition_id
 
             if hasattr(subform, "planned_quantity"):
-                subform.planned_quantity.data = (
-                    step.planned_quantity
-                )
+                subform.planned_quantity.data = step.planned_quantity
 
             if hasattr(subform, "actual_quantity"):
-                subform.actual_quantity.data = (
-                    step.actual_quantity
-                )
+                subform.actual_quantity.data = step.actual_quantity
 
     @login_required
     async def edit(self, request: Request) -> Response:
@@ -443,10 +579,7 @@ class NewAdmin(Admin):
             data,
         )
 
-        if (
-            isinstance(model, DailyPlan)
-            and result.need_confirm
-        ):
+        if isinstance(model, DailyPlan) and result.need_confirm:
             return await self.templates.TemplateResponse(
                 request,
                 model_view.edit_template,
@@ -507,9 +640,7 @@ class NewAdmin(Admin):
                 detail="Удаление запрещено",
             )
 
-        restriction = (
-            await model_view.check_restrictions_delete(request)
-        )
+        restriction = await model_view.check_restrictions_delete(request)
 
         if restriction:
             raise HTTPException(
@@ -523,21 +654,14 @@ class NewAdmin(Admin):
             raw_pks = request.query_params.get("pks", "")
 
             try:
-                backup_ids = [
-                    int(value)
-                    for value in raw_pks.split(",")
-                    if value
-                ]
+                backup_ids = [int(value) for value in raw_pks.split(",") if value]
             except ValueError:
                 raise HTTPException(
                     status_code=400,
                     detail="Некорректные идентификаторы",
                 )
 
-            if (
-                not backup_ids
-                or any(pk <= 0 for pk in backup_ids)
-            ):
+            if not backup_ids or any(pk <= 0 for pk in backup_ids):
                 raise HTTPException(
                     status_code=400,
                     detail="Некорректные идентификаторы",
@@ -557,13 +681,9 @@ class NewAdmin(Admin):
 
                 path = (root / backup.name).resolve()
 
-                if (
-                    path.parent != root
-                    or path.suffix != ".dump"
-                ):
+                if path.parent != root or path.suffix != ".dump":
                     logger.error(
-                        "Отклонён путь резервной копии: "
-                        "backup_id=%s",
+                        "Отклонён путь резервной копии: " "backup_id=%s",
                         backup_id,
                     )
 
@@ -578,9 +698,7 @@ class NewAdmin(Admin):
             result = await super().delete(request)
 
         except IntegrityError:
-            logger.exception(
-                "Нарушение целостности при удалении в SQLAdmin"
-            )
+            logger.exception("Нарушение целостности при удалении в SQLAdmin")
 
             return Response(
                 status_code=409,
@@ -605,8 +723,7 @@ class NewAdmin(Admin):
 
                 except OSError:
                     logger.exception(
-                        "Запись удалена, но файл бэкапа "
-                        "удалить не удалось"
+                        "Запись удалена, но файл бэкапа " "удалить не удалось"
                     )
 
         return cast(Response, result)
@@ -707,10 +824,7 @@ class NewAdmin(Admin):
             data,
         )
 
-        if (
-            model_view.model is DailyPlan
-            and result.need_confirm
-        ):
+        if model_view.model is DailyPlan and result.need_confirm:
             context.update(
                 form=form,
                 error=(

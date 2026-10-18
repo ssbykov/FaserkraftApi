@@ -17,12 +17,18 @@ from app.database.schemas.mobile import (
     MobileDeviceRegistered,
     MobileInvitationIssue,
     MobileInvitationIssued,
+    MobileRefresh,
     MobileRegisterDevice,
+    MobileTokens,
 )
 from app.services.device_invitations import (
     DeviceInvitationError,
     DeviceInvitationResult,
     issue_device_invitation,
+)
+from app.services.mobile_refresh import (
+    MobileRefreshError,
+    refresh_mobile_session,
 )
 from app.services.mobile_registration import (
     MobileRegistrationError,
@@ -162,6 +168,7 @@ async def register_device_from_invitation(
 
     return MobileDeviceRegistered(
         access_token=result.access_token,
+        refresh_token=result.refresh_token,
         expires_at=result.expires_at,
         user_email=result.user_email,
         employee_name=result.employee_name,
@@ -169,6 +176,28 @@ async def register_device_from_invitation(
         device_id=result.device_id,
         model=result.model,
         manufacturer=result.manufacturer,
+    )
+
+
+@router.post(
+    "/refresh",
+    response_model=MobileTokens,
+)
+async def refresh_mobile_tokens(payload: MobileRefresh) -> MobileTokens:
+    try:
+        result = await refresh_mobile_session(
+            refresh_token=payload.refresh_token,
+        )
+    except MobileRefreshError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="INVALID_REFRESH_TOKEN",
+        ) from exc
+
+    return MobileTokens(
+        access_token=result.access_token,
+        refresh_token=result.refresh_token,
+        expires_at=result.expires_at,
     )
 
 

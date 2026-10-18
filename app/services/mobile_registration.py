@@ -16,9 +16,8 @@ from app.database.models import (
     User,
 )
 
-
-# Временная политика до добавления настроек и продления сессий.
-MOBILE_SESSION_LIFETIME = timedelta(hours=12)
+# Access-токен короткий, refresh-токен бессрочный (обновляется ротацией).
+ACCESS_LIFETIME = timedelta(hours=1)
 
 MAX_INVITATION_TOKEN_LENGTH = 512
 
@@ -34,6 +33,7 @@ class MobileRegistrationError(Exception):
 @dataclass(frozen=True, slots=True)
 class MobileRegistrationResult:
     access_token: str
+    refresh_token: str
     expires_at: datetime
     user_email: str
     employee_name: str
@@ -66,9 +66,7 @@ async def register_mobile_device(
         or not invitation_token
         or len(invitation_token) > MAX_INVITATION_TOKEN_LENGTH
     ):
-        raise MobileRegistrationError(
-            "INVALID_DEVICE_INVITATION"
-        )
+        raise MobileRegistrationError("INVALID_DEVICE_INVITATION")
 
     device_fields = (device_id, model, manufacturer)
 
@@ -92,9 +90,7 @@ async def register_mobile_device(
                 )
 
                 if employee_id is None:
-                    raise MobileRegistrationError(
-                        "INVALID_DEVICE_INVITATION"
-                    )
+                    raise MobileRegistrationError("INVALID_DEVICE_INVITATION")
 
                 # Все регистрации одного сотрудника выполняются
                 # последовательно через блокировку его строки.
@@ -106,9 +102,7 @@ async def register_mobile_device(
                 )
 
                 if employee is None or employee.user_id is None:
-                    raise MobileRegistrationError(
-                        "INVALID_DEVICE_INVITATION"
-                    )
+                    raise MobileRegistrationError("INVALID_DEVICE_INVITATION")
 
                 # Повторно проверяем приглашение после получения
                 # блокировки сотрудника.
@@ -122,9 +116,7 @@ async def register_mobile_device(
                 )
 
                 if invitation is None:
-                    raise MobileRegistrationError(
-                        "INVALID_DEVICE_INVITATION"
-                    )
+                    raise MobileRegistrationError("INVALID_DEVICE_INVITATION")
 
                 user = await session.scalar(
                     select(User)
@@ -138,9 +130,7 @@ async def register_mobile_device(
                     or not user.is_active
                     or not user.is_verified
                 ):
-                    raise MobileRegistrationError(
-                        "USER_NOT_ALLOWED"
-                    )
+                    raise MobileRegistrationError("USER_NOT_ALLOWED")
 
                 old_device: Device | None = None
 
@@ -160,14 +150,12 @@ async def register_mobile_device(
                 # Проверяем срок после ожидания всех основных
                 # блокировок, используя текущее время PostgreSQL.
                 now: datetime = (
-                    await session.execute(
-                        select(func.clock_timestamp())
-                    )
+                    await session.execute(select(func.clock_timestamp()))
                 ).scalar_one()
 
                 used_at: datetime | None = invitation.used_at
                 revoked_at: datetime | None = invitation.revoked_at
-                expires_at: datetime = invitation.expires_at
+                invitation_expires_at: datetime = invitation.expires_at
 
                 if used_at is not None:
                     raise MobileRegistrationError("INVALID_DEVICE_INVITATION")
@@ -175,19 +163,15 @@ async def register_mobile_device(
                 if revoked_at is not None:
                     raise MobileRegistrationError("INVALID_DEVICE_INVITATION")
 
-                if expires_at <= now:
+                if invitation_expires_at <= now:
                     raise MobileRegistrationError("INVALID_DEVICE_INVITATION")
 
                 existing_device_id = await session.scalar(
-                    select(Device.id).where(
-                        Device.device_id == device_id,
-                    )
+                    select(Device.id).where(Device.device_id == device_id)
                 )
 
                 if existing_device_id is not None:
-                    raise MobileRegistrationError(
-                        "DEVICE_ALREADY_REGISTERED"
-                    )
+                    raise MobileRegistrationError("DEVICE_ALREADY_REGISTERED")
 
                 device = Device(
                     device_id=device_id,
@@ -212,9 +196,7 @@ async def register_mobile_device(
                             MobileSession.revoked_at.is_(None),
                         )
                         .values(revoked_at=now)
-                        .execution_options(
-                            synchronize_session=False,
-                        )
+                        .execution_options(synchronize_session=False)
                     )
 
                 employee.device_id = device.id
@@ -232,27 +214,29 @@ async def register_mobile_device(
                         DeviceInvitation.revoked_at.is_(None),
                     )
                     .values(revoked_at=now)
-                    .execution_options(
-                        synchronize_session=False,
-                    )
+                    .execution_options(synchronize_session=False)
                 )
 
                 access_token = secrets.token_urlsafe(32)
-                expires_at = now + MOBILE_SESSION_LIFETIME
+                refresh_token = secrets.token_urlsafe(48)
+                session_expires_at = now + ACCESS_LIFETIME
 
-                mobile_session = MobileSession(
-                    token_hash=hash_token(access_token),
-                    user_id=user.id,
-                    device_id=device.id,
-                    expires_at=expires_at,
+                session.add(
+                    MobileSession(
+                        token_hash=hash_token(access_token),
+                        refresh_token_hash=hash_token(refresh_token),
+                        user_id=user.id,
+                        device_id=device.id,
+                        expires_at=session_expires_at,
+                    )
                 )
-                session.add(mobile_session)
 
                 await session.flush()
 
                 result = MobileRegistrationResult(
                     access_token=access_token,
-                    expires_at=expires_at,
+                    refresh_token=refresh_token,
+                    expires_at=session_expires_at,
                     user_email=user.email,
                     employee_name=employee.name,
                     employee_role=employee.role.value,
@@ -267,6 +251,4 @@ async def register_mobile_device(
         except IntegrityError as exc:
             # Ошибка могла возникнуть не только из-за device_id,
             # поэтому не выдаём любой IntegrityError за дубликат.
-            raise MobileRegistrationError(
-                "REGISTRATION_CONFLICT"
-            ) from exc
+            raise MobileRegistrationError("REGISTRATION_CONFLICT") from exc
