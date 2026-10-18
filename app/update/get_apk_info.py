@@ -1,11 +1,12 @@
 import json
+from pathlib import Path
 
-from database.schemas.app_update import ReleaseFileData
 from core import settings
+from database.schemas.app_update import ReleaseFileData
 
 
 def load_release_info() -> ReleaseFileData:
-    release_file = settings.app_update.release_file
+    release_file = Path(settings.app_update.release_file)
     if not release_file.exists():
         raise FileNotFoundError(f"Release file not found: {release_file}")
 

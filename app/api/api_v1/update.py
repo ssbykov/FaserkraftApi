@@ -15,14 +15,30 @@ router = APIRouter(
 )
 
 
+import logging
+
+from fastapi import HTTPException, status
+
+logger = logging.getLogger(__name__)
+
+
 @router.get("/version", response_model=VersionInfoResponse)
 async def get_latest_version(
     employee: Annotated[EmployeeRead, Depends(get_current_employee_any)],
-) -> Optional[VersionInfoResponse]:
+) -> VersionInfoResponse:
     try:
         release = load_release_info()
-    except Exception as e:
-        return None
+    except FileNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="RELEASE_NOT_FOUND",
+        )
+    except ValueError as exc:
+        logger.error("Invalid release metadata: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="RELEASE_METADATA_INVALID",
+        )
 
     return VersionInfoResponse(
         version_name=release.version_name,
