@@ -2,12 +2,14 @@ import json
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy import select
 
 from app.api.api_v1.fastapi_users import current_user
 from app.api.dependencies.mobile_sessions import (
     get_current_mobile_employee,
     require_mobile_admin_or_master,
+    mobile_bearer,
 )
 from app.core import settings
 from app.database import SessionDep
@@ -20,6 +22,7 @@ from app.database.schemas.mobile import (
     MobileRefresh,
     MobileRegisterDevice,
     MobileTokens,
+    MobileLogoutResult,
 )
 from app.services.device_invitations import (
     DeviceInvitationError,
@@ -35,6 +38,7 @@ from app.services.mobile_registration import (
     MobileRegistrationResult,
     register_mobile_device,
 )
+from app.services.mobile_logout import revoke_mobile_device
 
 router = APIRouter(
     tags=["MobileAuth"],
@@ -212,3 +216,14 @@ async def read_current_mobile_employee(
     ],
 ) -> EmployeeRead:
     return employee
+
+@router.post("/logout", response_model=MobileLogoutResult)
+async def logout_mobile_device(
+    _: Annotated[EmployeeRead, Depends(get_current_mobile_employee)],
+    credentials: Annotated[
+        HTTPAuthorizationCredentials | None, Depends(mobile_bearer)
+    ],
+) -> MobileLogoutResult:
+    if credentials is not None:
+        await revoke_mobile_device(access_token=credentials.credentials)
+    return MobileLogoutResult()
