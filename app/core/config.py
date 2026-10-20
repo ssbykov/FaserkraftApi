@@ -37,14 +37,15 @@ class AccessToken(BaseModel):
 
 
 class AppUpdate(BaseModel):
-    release_dir: Path = Path("releases")
-    release_file: str = str(Path("releases") / "release.json")
+    release_dir: Path = ROOT / "releases"
+    release_file: Path = ROOT / "releases" / "release.json"
 
 
 class ApiV1Prefix(BaseModel):
     prefix: str = "/v1"
     days: str = "/days"
     auth: str = "/auth"
+    mobile: str = "/mobile"
     users: str = "/users"
     update: str = "/app-update"
     products: str = "/products"
